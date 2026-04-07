@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
-import { fetchBooks } from "@/lib/api";
+import { db } from "@/lib/db";
+import { books } from "@/lib/db/schema";
 import { LoginForm } from "./login-form";
 import { AdminDashboard } from "./dashboard";
 
@@ -10,14 +11,14 @@ export default async function AdminPage() {
 
   if (!isLoggedIn) {
     return (
-      <div className="max-w-sm mx-auto mt-20">
+      <div className="max-w-sm mx-auto mt-12 sm:mt-20 px-2">
         <h1 className="text-xl font-bold mb-4">Admin Login</h1>
         <LoginForm />
       </div>
     );
   }
 
-  const { books } = await fetchBooks();
+  const allBooks = await db.select().from(books);
 
-  return <AdminDashboard initialBooks={books} />;
+  return <AdminDashboard initialBooks={allBooks} />;
 }

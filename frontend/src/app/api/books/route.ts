@@ -1,8 +1,7 @@
-import { fetchBooks } from "@/lib/api";
+import { db } from "@/lib/db";
+import { books } from "@/lib/db/schema";
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const available = searchParams.get("available") === "1";
-  const data = await fetchBooks(available);
-  return Response.json(data);
+export async function GET() {
+  const allBooks = await db.select().from(books);
+  return Response.json({ books: allBooks, count: allBooks.length });
 }

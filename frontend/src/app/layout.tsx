@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Ammar's Library",
-  description: "Browse Ammar's book collection",
+  title: "shelflet",
+  description: "Ammar's book collection",
 };
 
 export default function RootLayout({
@@ -29,10 +29,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground font-sans">
-        <header className="border-b border-neutral-200 px-6 py-4">
+        <header className="border-b border-neutral-200 px-3 py-3 sm:px-6 sm:py-4">
           <div className="max-w-5xl mx-auto flex items-center justify-between">
-            <Link href="/" className="text-xl font-semibold tracking-tight">
-              Ammar&apos;s Library
+            <Link href="/" className="text-lg sm:text-xl font-semibold tracking-tight">
+              shelflet
             </Link>
             <Link
               href="/admin"
@@ -42,7 +42,7 @@ export default function RootLayout({
             </Link>
           </div>
         </header>
-        <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8">
+        <main className="flex-1 max-w-5xl mx-auto w-full px-2 py-4 sm:px-6 sm:py-8">
           {children}
         </main>
       </body>
