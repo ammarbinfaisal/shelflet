@@ -10,7 +10,7 @@ const XLSX = require("xlsx");
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dbPath = process.env.DB_PATH || "/data/shelflet.db";
-const xlsxPath = resolve(__dirname, "../../books.xlsx");
+const xlsxPath = resolve(__dirname, "../books.xlsx");
 
 const sqlite = new Database(dbPath);
 sqlite.pragma("journal_mode = WAL");
