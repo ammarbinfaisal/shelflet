@@ -16,7 +16,9 @@ export default async function AdminPage() {
     );
   }
 
-  const res = await apiFetch("/api/books");
+  const res = await apiFetch("/api/books?all=1", {
+    headers: { Cookie: `admin_session=${session.value}` },
+  });
   const { books } = await res.json();
 
   return <AdminDashboard initialBooks={books} />;

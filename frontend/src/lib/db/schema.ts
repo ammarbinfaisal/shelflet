@@ -6,5 +6,16 @@ export type Book = {
   language: string;
   category: string;
   lentTo: string;
+  hidden: number;
+  createdAt: string;
+};
+
+export type LendingLog = {
+  id: number;
+  bookId: number;
+  bookTitle: string;
+  borrower: string;
+  action: string;
+  note: string;
   createdAt: string;
 };

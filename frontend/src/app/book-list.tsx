@@ -146,6 +146,9 @@ export function BookList({ books }: { books: Book[] }) {
             <div className="min-w-0">
               <p className="font-medium text-sm truncate">{book.title}</p>
               <p className="text-xs text-neutral-500 truncate">{book.author}</p>
+              {book.explanation && (
+                <p className="text-xs text-neutral-400 mt-0.5 truncate">{book.explanation}</p>
+              )}
               {book.category && (
                 <p className="text-xs text-neutral-400 mt-0.5">{book.category}</p>
               )}
@@ -170,6 +173,7 @@ export function BookList({ books }: { books: Book[] }) {
             <tr className="bg-neutral-50 text-left text-neutral-500">
               <SortHeader field="title">Title</SortHeader>
               <SortHeader field="author">Author</SortHeader>
+              <th className="px-4 py-3 font-medium">Info</th>
               <SortHeader field="category">Category</SortHeader>
               <SortHeader field="language">Language</SortHeader>
               <th className="px-4 py-3 font-medium">Status</th>
@@ -180,6 +184,7 @@ export function BookList({ books }: { books: Book[] }) {
               <tr key={book.id} className="hover:bg-neutral-50 transition-colors">
                 <td className="px-4 py-3 font-medium">{book.title}</td>
                 <td className="px-4 py-3 text-neutral-600">{book.author}</td>
+                <td className="px-4 py-3 text-neutral-500 text-xs">{book.explanation}</td>
                 <td className="px-4 py-3 text-neutral-500">{book.category}</td>
                 <td className="px-4 py-3 text-neutral-500">{book.language}</td>
                 <td className="px-4 py-3">

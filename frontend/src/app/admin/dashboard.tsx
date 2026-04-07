@@ -2,6 +2,7 @@
 
 import { useActionState, useTransition } from "react";
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import type { Book } from "@/lib/db/schema";
 import { ComboboxMulti } from "@/components/combobox-multi";
 
@@ -60,6 +61,39 @@ function IconTrash({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+  );
+}
+
+function IconEdit({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+    </svg>
+  );
+}
+
+function IconHistory({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function IconEyeOff({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+    </svg>
+  );
+}
+
+function IconEye({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
     </svg>
   );
 }
@@ -151,6 +185,89 @@ function AddBookForm({
   );
 }
 
+// ── Edit Book Dialog ────────────────────────────────
+
+function EditDialog({
+  book,
+  onClose,
+  onDone,
+  categoryOptions,
+  languageOptions,
+}: {
+  book: Book;
+  onClose: () => void;
+  onDone: () => void;
+  categoryOptions: string[];
+  languageOptions: string[];
+}) {
+  const [categories, setCategories] = useState<string[]>(
+    (book.category || "").split(",").map((s) => s.trim()).filter(Boolean)
+  );
+  const [languages, setLanguages] = useState<string[]>(
+    (book.language || "").split(",").map((s) => s.trim()).filter(Boolean)
+  );
+
+  const [state, formAction, isPending] = useActionState(
+    async (_prev: FormState, formData: FormData): Promise<FormState> => {
+      const result = await mutate("edit", {
+        id: book.id,
+        title: formData.get("title"),
+        author: formData.get("author"),
+        explanation: formData.get("explanation"),
+        language: languages.join(", "),
+        category: categories.join(", "),
+      });
+      if (result.error) return { error: result.error };
+      onDone();
+      return { message: "Saved" };
+    },
+    null
+  );
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50">
+      <div className="bg-background rounded-t-xl sm:rounded-lg p-4 sm:p-6 w-full sm:max-w-md">
+        <h3 className="font-semibold mb-3 text-sm">Edit Book</h3>
+        <form action={formAction} className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+            <input name="title" defaultValue={book.title} placeholder="Title" required className="input-field" />
+            <input name="author" defaultValue={book.author} placeholder="Author" required className="input-field" />
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Category</label>
+              <ComboboxMulti
+                options={categoryOptions}
+                selected={categories}
+                onChange={setCategories}
+                placeholder="Select categories..."
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Language</label>
+              <ComboboxMulti
+                options={languageOptions}
+                selected={languages}
+                onChange={setLanguages}
+                placeholder="Select languages..."
+              />
+            </div>
+            <input name="explanation" defaultValue={book.explanation} placeholder="Notes" className="input-field sm:col-span-2" />
+          </div>
+          {state?.error && <p className="text-red-600 text-xs">{state.error}</p>}
+          {state?.message && <p className="text-green-600 text-xs">{state.message}</p>}
+          <div className="flex gap-2">
+            <button type="submit" disabled={isPending} className="btn-primary flex-1">
+              {isPending ? "Saving..." : "Save"}
+            </button>
+            <button type="button" onClick={onClose} className="btn-secondary flex-1">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Lend Dialog ──────────────────────────────────────
 
 function LendDialog({
@@ -167,6 +284,7 @@ function LendDialog({
       const result = await mutate("lend", {
         id: book.id,
         lentTo: formData.get("lentTo"),
+        note: formData.get("note") || "",
       });
       if (result.success) {
         onDone();
@@ -190,6 +308,11 @@ function LendDialog({
             required
             className="input-field w-full"
           />
+          <input
+            name="note"
+            placeholder="Note (optional)"
+            className="input-field w-full"
+          />
           {state?.error && <p className="text-red-600 text-xs">{state.error}</p>}
           <div className="flex gap-2">
             <button type="submit" disabled={isPending} className="btn-primary flex-1">
@@ -210,6 +333,7 @@ function LendDialog({
 export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
   const [books, setBooks] = useState(initialBooks);
   const [lendingBook, setLendingBook] = useState<Book | null>(null);
+  const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [isRefreshing, startRefresh] = useTransition();
 
   const categoryOptions = useMemo(
@@ -223,7 +347,7 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
 
   function refresh() {
     startRefresh(async () => {
-      const res = await fetch("/api/books");
+      const res = await fetch("/api/books?all=1");
       const data = await res.json();
       setBooks(data.books);
     });
@@ -232,7 +356,16 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
   function handleReturn(book: Book) {
     startRefresh(async () => {
       await mutate("return", { id: book.id });
-      const res = await fetch("/api/books");
+      const res = await fetch("/api/books?all=1");
+      const data = await res.json();
+      setBooks(data.books);
+    });
+  }
+
+  function handleToggleHide(book: Book) {
+    startRefresh(async () => {
+      await mutate(book.hidden ? "unhide" : "hide", { id: book.id });
+      const res = await fetch("/api/books?all=1");
       const data = await res.json();
       setBooks(data.books);
     });
@@ -242,7 +375,7 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
     if (!confirm(`Delete "${book.title}"?`)) return;
     startRefresh(async () => {
       await mutate("delete", { id: book.id });
-      const res = await fetch("/api/books");
+      const res = await fetch("/api/books?all=1");
       const data = await res.json();
       setBooks(data.books);
     });
@@ -258,6 +391,14 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <h1 className="text-lg sm:text-2xl font-bold">Dashboard</h1>
         <div className="flex gap-1.5 sm:gap-2">
+          <Link
+            href="/admin/lending"
+            className="icon-btn"
+            title="Lending History"
+          >
+            <IconHistory />
+            <span className="hidden sm:inline">Lending</span>
+          </Link>
           <button
             onClick={refresh}
             disabled={isRefreshing}
@@ -285,16 +426,34 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
         {books.map((book) => (
           <div
             key={book.id}
-            className="border border-border rounded-lg p-3 flex items-start gap-2"
+            className={`border rounded-lg p-3 flex items-start gap-2 ${book.hidden ? "border-neutral-100 opacity-50" : "border-border"}`}
           >
             <div className="min-w-0 flex-1">
               <p className="font-medium text-sm truncate">{book.title}</p>
               <p className="text-xs text-muted-foreground truncate">{book.author}</p>
+              {book.explanation && (
+                <p className="text-xs text-neutral-400 mt-0.5 truncate">{book.explanation}</p>
+              )}
               {book.lentTo && (
                 <p className="text-xs text-amber-700 mt-0.5">Lent to {book.lentTo}</p>
               )}
+              {book.hidden ? <p className="text-xs text-neutral-400 mt-0.5">Hidden</p> : null}
             </div>
             <div className="flex gap-1 shrink-0">
+              <button
+                onClick={() => setEditingBook(book)}
+                className="p-2 rounded-lg bg-neutral-50 text-neutral-600 active:bg-neutral-100"
+                title="Edit"
+              >
+                <IconEdit />
+              </button>
+              <button
+                onClick={() => handleToggleHide(book)}
+                className="p-2 rounded-lg bg-neutral-50 text-neutral-600 active:bg-neutral-100"
+                title={book.hidden ? "Unhide" : "Hide"}
+              >
+                {book.hidden ? <IconEye /> : <IconEyeOff />}
+              </button>
               {book.lentTo ? (
                 <button
                   onClick={() => handleReturn(book)}
@@ -331,6 +490,7 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
             <tr className="bg-muted/50 text-left text-muted-foreground">
               <th className="px-4 py-3 font-medium">Title</th>
               <th className="px-4 py-3 font-medium">Author</th>
+              <th className="px-4 py-3 font-medium">Info</th>
               <th className="px-4 py-3 font-medium">Category</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Actions</th>
@@ -338,12 +498,15 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
           </thead>
           <tbody className="divide-y divide-border">
             {books.map((book) => (
-              <tr key={book.id} className="hover:bg-muted/30">
+              <tr key={book.id} className={`hover:bg-muted/30 ${book.hidden ? "opacity-50" : ""}`}>
                 <td className="px-4 py-3 font-medium">{book.title}</td>
                 <td className="px-4 py-3 text-muted-foreground">{book.author}</td>
+                <td className="px-4 py-3 text-muted-foreground text-xs">{book.explanation}</td>
                 <td className="px-4 py-3 text-muted-foreground">{book.category}</td>
                 <td className="px-4 py-3">
-                  {book.lentTo ? (
+                  {book.hidden ? (
+                    <span className="text-xs text-neutral-400">Hidden</span>
+                  ) : book.lentTo ? (
                     <span className="text-xs text-amber-700">Lent to {book.lentTo}</span>
                   ) : (
                     <span className="text-xs text-green-700">Available</span>
@@ -351,6 +514,20 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-1">
+                    <button
+                      onClick={() => setEditingBook(book)}
+                      className="icon-btn-sm text-neutral-600 bg-neutral-50 hover:bg-neutral-100"
+                    >
+                      <IconEdit />
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      onClick={() => handleToggleHide(book)}
+                      className="icon-btn-sm text-neutral-600 bg-neutral-50 hover:bg-neutral-100"
+                    >
+                      {book.hidden ? <IconEye /> : <IconEyeOff />}
+                      <span>{book.hidden ? "Show" : "Hide"}</span>
+                    </button>
                     {book.lentTo ? (
                       <button
                         onClick={() => handleReturn(book)}
@@ -391,6 +568,19 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
             setLendingBook(null);
             refresh();
           }}
+        />
+      )}
+
+      {editingBook && (
+        <EditDialog
+          book={editingBook}
+          onClose={() => setEditingBook(null)}
+          onDone={() => {
+            setEditingBook(null);
+            refresh();
+          }}
+          categoryOptions={categoryOptions}
+          languageOptions={languageOptions}
         />
       )}
     </div>
