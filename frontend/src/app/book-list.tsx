@@ -1,11 +1,45 @@
 "use client";
 
-import { useMemo, useCallback } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useMemo, useState, useRef, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import type { Book } from "@/lib/db/schema";
+import { Badge } from "@/components/ui/badge";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 type SortField = "title" | "author" | "category" | "language";
 type SortDir = "asc" | "desc";
+
+type Filters = {
+  categories: Set<string>;
+  languages: Set<string>;
+  authors: Set<string>;
+  query: string;
+};
+
+function parseInitialState(params: URLSearchParams) {
+  return {
+    sortField: (params.get("sort") as SortField) || "language",
+    sortDir: (params.get("dir") as SortDir) || "desc",
+    filters: {
+      categories: params.get("cat") ? new Set(params.get("cat")!.split(",")) : new Set<string>(),
+      languages: params.get("lang") ? new Set(params.get("lang")!.split(",")) : new Set<string>(),
+      authors: params.get("author") ? new Set(params.get("author")!.split(",")) : new Set<string>(),
+      query: params.get("q") || "",
+    } as Filters,
+  };
+}
 
 function IconSort({ active, dir }: { active: boolean; dir: SortDir }) {
   return (
@@ -19,76 +53,234 @@ function IconSort({ active, dir }: { active: boolean; dir: SortDir }) {
   );
 }
 
+function IconFilter({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+    </svg>
+  );
+}
+
+function IconChevron({ className = "w-3 h-3" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
+
+// ── Column Filter Popover (desktop) ──────────────────
+
+function ColumnFilter({
+  label,
+  options,
+  selected,
+  onToggle,
+  onClear,
+}: {
+  label: string;
+  options: string[];
+  selected: Set<string>;
+  onToggle: (val: string) => void;
+  onClear: () => void;
+}) {
+  const hasFilter = selected.size > 0;
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        className={`inline-flex items-center gap-0.5 text-xs cursor-pointer ${
+          hasFilter ? "text-neutral-900 font-semibold" : "text-neutral-400"
+        } hover:text-neutral-600`}
+      >
+        <IconFilter className="w-3 h-3" />
+        {hasFilter && <span className="text-[10px]">({selected.size})</span>}
+      </PopoverTrigger>
+      <PopoverContent className="w-48 p-0" align="start">
+        <div className="max-h-56 overflow-y-auto p-1">
+          {options.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => onToggle(opt)}
+              className={`flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-neutral-50 text-left ${
+                selected.has(opt) ? "font-medium text-neutral-900" : "text-neutral-600"
+              }`}
+            >
+              <span
+                className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                  selected.has(opt) ? "bg-neutral-900 border-neutral-900" : "border-neutral-300"
+                }`}
+              >
+                {selected.has(opt) && (
+                  <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </span>
+              {opt}
+            </button>
+          ))}
+        </div>
+        {hasFilter && (
+          <div className="border-t p-1">
+            <button
+              onClick={onClear}
+              className="w-full px-2 py-1 text-xs text-neutral-400 hover:text-neutral-600 text-left"
+            >
+              Clear filter
+            </button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ── Mobile Filter Sheet ──────────────────────────────
+
+function FilterSection({
+  label,
+  options,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  options: string[];
+  selected: Set<string>;
+  onToggle: (val: string) => void;
+}) {
+  return (
+    <div className="mb-4">
+      <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-2">{label}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((opt) => (
+          <button
+            key={opt}
+            onClick={() => onToggle(opt)}
+            className={`px-2.5 py-1.5 text-xs rounded-full transition-colors ${
+              selected.has(opt)
+                ? "bg-neutral-900 text-white"
+                : "bg-neutral-100 text-neutral-600 active:bg-neutral-200"
+            }`}
+          >
+            {opt}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ───────────────────────────────────
+
 export function BookList({ books }: { books: Book[] }) {
   const searchParams = useSearchParams();
-  const router = useRouter();
+  const initial = useMemo(() => parseInitialState(searchParams), []);
 
-  const search = searchParams.get("q") || "";
-  const sortField = (searchParams.get("sort") as SortField) || "language";
-  const sortDir = (searchParams.get("dir") as SortDir) || "desc";
-  const selectedCategories = useMemo(() => {
-    const cats = searchParams.get("cat");
-    return cats ? new Set(cats.split(",")) : new Set<string>();
-  }, [searchParams]);
+  const [sortField, setSortField] = useState<SortField>(initial.sortField);
+  const [sortDir, setSortDir] = useState<SortDir>(initial.sortDir);
+  const [filters, setFilters] = useState<Filters>(initial.filters);
 
-  const updateParams = useCallback(
-    (updates: Record<string, string | null>) => {
-      const params = new URLSearchParams(searchParams.toString());
-      for (const [key, value] of Object.entries(updates)) {
-        if (value === null || value === "") {
-          params.delete(key);
-        } else {
-          params.set(key, value);
-        }
-      }
+  // Deferred URL sync
+  const rafId = useRef(0);
+  const syncToUrl = useCallback((s: { sort: SortField; dir: SortDir; f: Filters }) => {
+    cancelAnimationFrame(rafId.current);
+    rafId.current = requestAnimationFrame(() => {
+      const params = new URLSearchParams();
+      if (s.f.query) params.set("q", s.f.query);
+      if (s.sort !== "language") params.set("sort", s.sort);
+      if (s.dir !== "desc") params.set("dir", s.dir);
+      if (s.f.categories.size > 0) params.set("cat", [...s.f.categories].join(","));
+      if (s.f.languages.size > 0) params.set("lang", [...s.f.languages].join(","));
+      if (s.f.authors.size > 0) params.set("author", [...s.f.authors].join(","));
       const qs = params.toString();
-      router.replace(qs ? `?${qs}` : "/", { scroll: false });
-    },
-    [searchParams, router]
-  );
+      window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+    });
+  }, []);
 
+  // Unique values for filter options
   const allCategories = useMemo(
-    () =>
-      [...new Set(books.flatMap((b) => (b.category || "").split(",").map((s) => s.trim())).filter(Boolean))].sort(),
+    () => [...new Set(books.flatMap((b) => (b.category || "").split(",").map((s) => s.trim())).filter(Boolean))].sort(),
+    [books]
+  );
+  const allLanguages = useMemo(
+    () => [...new Set(books.flatMap((b) => (b.language || "").split(",").map((s) => s.trim())).filter(Boolean))].sort(),
+    [books]
+  );
+  const allAuthors = useMemo(
+    () => [...new Set(books.map((b) => b.author).filter(Boolean))].sort(),
     [books]
   );
 
+  function toggleFilter(key: keyof Pick<Filters, "categories" | "languages" | "authors">, val: string) {
+    setFilters((prev) => {
+      const next = { ...prev, [key]: new Set(prev[key]) };
+      if (next[key].has(val)) next[key].delete(val);
+      else next[key].add(val);
+      syncToUrl({ sort: sortField, dir: sortDir, f: next });
+      return next;
+    });
+  }
+
+  function clearFilter(key: keyof Pick<Filters, "categories" | "languages" | "authors">) {
+    setFilters((prev) => {
+      const next = { ...prev, [key]: new Set<string>() };
+      syncToUrl({ sort: sortField, dir: sortDir, f: next });
+      return next;
+    });
+  }
+
+  function clearAllFilters() {
+    const next: Filters = { categories: new Set(), languages: new Set(), authors: new Set(), query: "" };
+    setFilters(next);
+    syncToUrl({ sort: sortField, dir: sortDir, f: next });
+  }
+
+  function updateQuery(q: string) {
+    setFilters((prev) => {
+      const next = { ...prev, query: q };
+      syncToUrl({ sort: sortField, dir: sortDir, f: next });
+      return next;
+    });
+  }
+
   function toggleSort(field: SortField) {
-    if (sortField === field) {
-      updateParams({ dir: sortDir === "asc" ? "desc" : "asc" });
-    } else {
-      updateParams({ sort: field, dir: field === "language" ? "desc" : "asc" });
-    }
+    const newDir = sortField === field
+      ? (sortDir === "asc" ? "desc" : "asc") as SortDir
+      : (field === "language" ? "desc" : "asc") as SortDir;
+    setSortField(field);
+    setSortDir(newDir);
+    syncToUrl({ sort: field, dir: newDir, f: filters });
   }
 
-  function toggleCategory(cat: string) {
-    const next = new Set(selectedCategories);
-    if (next.has(cat)) next.delete(cat);
-    else next.add(cat);
-    updateParams({ cat: next.size > 0 ? [...next].join(",") : null });
-  }
-
-  function clearCategories() {
-    updateParams({ cat: null });
-  }
+  const activeFilterCount = filters.categories.size + filters.languages.size + filters.authors.size + (filters.query ? 1 : 0);
 
   const filtered = useMemo(() => {
     let result = books;
 
-    if (search) {
-      const q = search.toLowerCase();
+    if (filters.query) {
+      const q = filters.query.toLowerCase();
       result = result.filter(
-        (b) =>
-          b.title.toLowerCase().includes(q) ||
-          b.author.toLowerCase().includes(q)
+        (b) => b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q)
       );
     }
 
-    if (selectedCategories.size > 0) {
+    if (filters.categories.size > 0) {
       result = result.filter((b) => {
         const bookCats = (b.category || "").split(",").map((s) => s.trim());
-        return bookCats.some((c) => selectedCategories.has(c));
+        return bookCats.some((c) => filters.categories.has(c));
       });
+    }
+
+    if (filters.languages.size > 0) {
+      result = result.filter((b) => {
+        const bookLangs = (b.language || "").split(",").map((s) => s.trim());
+        return bookLangs.some((l) => filters.languages.has(l));
+      });
+    }
+
+    if (filters.authors.size > 0) {
+      result = result.filter((b) => filters.authors.has(b.author));
     }
 
     result = [...result].sort((a, b) => {
@@ -99,23 +291,66 @@ export function BookList({ books }: { books: Book[] }) {
     });
 
     return result;
-  }, [books, search, selectedCategories, sortField, sortDir]);
+  }, [books, filters, sortField, sortDir]);
 
   const available = filtered.filter((b) => !b.lentTo);
   const lentOut = filtered.filter((b) => b.lentTo);
 
   const SortHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
-    <th
-      className="px-4 py-3 font-medium cursor-pointer select-none hover:text-neutral-700"
-      onClick={() => toggleSort(field)}
-    >
-      {children}
-      <IconSort active={sortField === field} dir={sortField === field ? sortDir : "asc"} />
+    <th className="px-4 py-3 font-medium">
+      <div className="flex items-center gap-1">
+        <button
+          className="cursor-pointer select-none hover:text-neutral-700 flex items-center"
+          onClick={() => toggleSort(field)}
+        >
+          {children}
+          <IconSort active={sortField === field} dir={sortField === field ? sortDir : "asc"} />
+        </button>
+      </div>
     </th>
   );
 
+  const FilterableHeader = ({
+    field,
+    children,
+    options,
+    selected,
+    filterKey,
+  }: {
+    field: SortField;
+    children: React.ReactNode;
+    options: string[];
+    selected: Set<string>;
+    filterKey: keyof Pick<Filters, "categories" | "languages" | "authors">;
+  }) => (
+    <th className="px-4 py-3 font-medium">
+      <div className="flex items-center gap-1.5">
+        <button
+          className="cursor-pointer select-none hover:text-neutral-700 flex items-center"
+          onClick={() => toggleSort(field)}
+        >
+          {children}
+          <IconSort active={sortField === field} dir={sortField === field ? sortDir : "asc"} />
+        </button>
+        <ColumnFilter
+          label={field}
+          options={options}
+          selected={selected}
+          onToggle={(v) => toggleFilter(filterKey, v)}
+          onClear={() => clearFilter(filterKey)}
+        />
+      </div>
+    </th>
+  );
+
+  // Active filter badges
+  const activeBadges: { label: string; key: keyof Pick<Filters, "categories" | "languages" | "authors">; val: string }[] = [];
+  for (const c of filters.categories) activeBadges.push({ label: c, key: "categories", val: c });
+  for (const l of filters.languages) activeBadges.push({ label: l, key: "languages", val: l });
+  for (const a of filters.authors) activeBadges.push({ label: a, key: "authors", val: a });
+
   return (
-    <div>
+    <div className="pb-20 sm:pb-0">
       <div className="mb-4 sm:mb-6">
         <h1 className="text-xl sm:text-2xl font-bold mb-1">Book Collection</h1>
         <p className="text-neutral-500 text-xs sm:text-sm">
@@ -124,70 +359,166 @@ export function BookList({ books }: { books: Book[] }) {
         </p>
       </div>
 
-      {/* Search */}
-      <div className="mb-3 sm:mb-4">
-        <input
-          type="text"
-          placeholder="Search by title or author..."
-          value={search}
-          onChange={(e) => updateParams({ q: e.target.value || null })}
-          className="w-full sm:max-w-xs px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
-        />
-      </div>
-
-      {/* Category filters */}
-      <div className="mb-4 sm:mb-6 flex flex-wrap gap-1.5 sm:gap-2">
-        {allCategories.map((cat) => (
+      {/* Active filter badges */}
+      {(activeBadges.length > 0 || filters.query) && (
+        <div className="mb-3 sm:mb-4 flex flex-wrap gap-1.5 items-center">
+          {filters.query && (
+            <Badge
+              variant="secondary"
+              className="text-xs cursor-pointer"
+              onClick={() => updateQuery("")}
+            >
+              &ldquo;{filters.query}&rdquo; &times;
+            </Badge>
+          )}
+          {activeBadges.map((b) => (
+            <Badge
+              key={`${b.key}-${b.val}`}
+              variant="secondary"
+              className="text-xs cursor-pointer"
+              onClick={() => toggleFilter(b.key, b.val)}
+            >
+              {b.label} &times;
+            </Badge>
+          ))}
           <button
-            key={cat}
-            onClick={() => toggleCategory(cat)}
-            className={`px-2 py-0.5 sm:px-2.5 sm:py-1 text-xs rounded-full transition-colors ${
-              selectedCategories.has(cat)
-                ? "bg-neutral-900 text-white"
-                : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
-            }`}
+            onClick={clearAllFilters}
+            className="text-xs text-neutral-400 hover:text-neutral-600 ml-1"
           >
-            {cat}
+            Clear all
           </button>
-        ))}
-        {selectedCategories.size > 0 && (
-          <button
-            onClick={clearCategories}
-            className="px-2 py-0.5 sm:px-2.5 sm:py-1 text-xs rounded-full text-neutral-400 hover:text-neutral-600"
-          >
-            Clear
-          </button>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Mobile: card layout */}
+      {/* Mobile: cards + fixed bottom filter bar */}
       <div className="sm:hidden space-y-2">
         {filtered.map((book) => (
           <div
             key={book.id}
-            className="border border-neutral-200 rounded-lg p-3 flex items-start justify-between gap-2"
+            className="border border-neutral-200 rounded-lg p-3"
           >
-            <div className="min-w-0">
-              <p className="font-medium text-sm truncate">{book.title}</p>
-              <p className="text-xs text-neutral-500 truncate">{book.author}</p>
-              {book.explanation && (
-                <p className="text-xs text-neutral-400 mt-0.5 truncate">{book.explanation}</p>
-              )}
-              {book.category && (
-                <p className="text-xs text-neutral-400 mt-0.5">{book.category}</p>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="font-medium text-sm">{book.title}</p>
+                <p className="text-xs text-neutral-500">{book.author}</p>
+              </div>
+              {book.lentTo ? (
+                <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700">
+                  Out
+                </span>
+              ) : (
+                <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700">
+                  In
+                </span>
               )}
             </div>
-            {book.lentTo ? (
-              <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700">
-                Unavailable
-              </span>
-            ) : (
-              <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700">
-                Available
-              </span>
+            {(book.explanation || book.category) && (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {book.explanation && (
+                  <span className="text-[10px] text-neutral-400">{book.explanation}</span>
+                )}
+                {book.category && (
+                  <span className="text-[10px] text-neutral-400">
+                    {book.explanation ? " · " : ""}{book.category}
+                  </span>
+                )}
+              </div>
             )}
           </div>
         ))}
+
+        {filtered.length === 0 && (
+          <p className="text-center text-neutral-400 text-sm py-8">No books match your filters.</p>
+        )}
+
+        {/* Fixed bottom filter bar — thumb zone */}
+        <div className="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur border-t border-neutral-200 px-4 py-3 flex items-center justify-between z-40">
+          <Dialog>
+            <DialogTrigger
+              render={
+                <Button variant="outline" size="default" />
+              }
+            >
+              <IconFilter className="w-4 h-4" />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-neutral-900 text-white">
+                  {activeFilterCount}
+                </span>
+              )}
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Filter Books</DialogTitle>
+              </DialogHeader>
+              <div className="mt-2">
+                <div className="mb-4">
+                  <input
+                    type="text"
+                    placeholder="Search title or author..."
+                    value={filters.query}
+                    onChange={(e) => updateQuery(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                  />
+                </div>
+                <FilterSection
+                  label="Category"
+                  options={allCategories}
+                  selected={filters.categories}
+                  onToggle={(v) => toggleFilter("categories", v)}
+                />
+                <FilterSection
+                  label="Language"
+                  options={allLanguages}
+                  selected={filters.languages}
+                  onToggle={(v) => toggleFilter("languages", v)}
+                />
+                <FilterSection
+                  label="Author"
+                  options={allAuthors}
+                  selected={filters.authors}
+                  onToggle={(v) => toggleFilter("authors", v)}
+                />
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={clearAllFilters}
+                    className="w-full py-2 text-sm text-neutral-500 hover:text-neutral-700"
+                  >
+                    Clear all filters
+                  </button>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Sort toggle */}
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button variant="outline" size="default" />
+              }
+            >
+              <IconChevron className="w-3 h-3" />
+              Sort: {sortField}
+            </PopoverTrigger>
+            <PopoverContent className="w-40 p-1" align="end" side="top">
+              {(["title", "author", "category", "language"] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => toggleSort(f)}
+                  className={`flex items-center justify-between w-full px-2 py-1.5 text-xs rounded hover:bg-neutral-50 ${
+                    sortField === f ? "font-medium text-neutral-900" : "text-neutral-600"
+                  }`}
+                >
+                  <span className="capitalize">{f}</span>
+                  {sortField === f && (
+                    <span className="text-[10px] text-neutral-400">{sortDir === "asc" ? "A-Z" : "Z-A"}</span>
+                  )}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
 
       {/* Desktop: table layout */}
@@ -196,10 +527,10 @@ export function BookList({ books }: { books: Book[] }) {
           <thead>
             <tr className="bg-neutral-50 text-left text-neutral-500">
               <SortHeader field="title">Title</SortHeader>
-              <SortHeader field="author">Author</SortHeader>
+              <FilterableHeader field="author" options={allAuthors} selected={filters.authors} filterKey="authors">Author</FilterableHeader>
               <th className="px-4 py-3 font-medium">Info</th>
-              <SortHeader field="category">Category</SortHeader>
-              <SortHeader field="language">Language</SortHeader>
+              <FilterableHeader field="category" options={allCategories} selected={filters.categories} filterKey="categories">Category</FilterableHeader>
+              <FilterableHeader field="language" options={allLanguages} selected={filters.languages} filterKey="languages">Language</FilterableHeader>
               <th className="px-4 py-3 font-medium">Status</th>
             </tr>
           </thead>
@@ -229,7 +560,7 @@ export function BookList({ books }: { books: Book[] }) {
       </div>
 
       {filtered.length === 0 && (
-        <p className="text-center text-neutral-400 text-sm py-8">No books match your filters.</p>
+        <p className="hidden sm:block text-center text-neutral-400 text-sm py-8">No books match your filters.</p>
       )}
     </div>
   );
