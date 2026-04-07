@@ -26,6 +26,19 @@ sqlite.exec(`
     language TEXT DEFAULT 'English',
     category TEXT DEFAULT '',
     lent_to TEXT DEFAULT '',
+    hidden INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS lending_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id INTEGER NOT NULL,
+    book_title TEXT NOT NULL,
+    borrower TEXT NOT NULL,
+    action TEXT NOT NULL,
+    note TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   )
 `);

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import type { Book } from "@/lib/db/schema";
 
 type SortField = "title" | "author" | "category" | "language";
@@ -19,10 +20,32 @@ function IconSort({ active, dir }: { active: boolean; dir: SortDir }) {
 }
 
 export function BookList({ books }: { books: Book[] }) {
-  const [sortField, setSortField] = useState<SortField>("language");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
-  const [search, setSearch] = useState("");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const search = searchParams.get("q") || "";
+  const sortField = (searchParams.get("sort") as SortField) || "language";
+  const sortDir = (searchParams.get("dir") as SortDir) || "desc";
+  const selectedCategories = useMemo(() => {
+    const cats = searchParams.get("cat");
+    return cats ? new Set(cats.split(",")) : new Set<string>();
+  }, [searchParams]);
+
+  const updateParams = useCallback(
+    (updates: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams.toString());
+      for (const [key, value] of Object.entries(updates)) {
+        if (value === null || value === "") {
+          params.delete(key);
+        } else {
+          params.set(key, value);
+        }
+      }
+      const qs = params.toString();
+      router.replace(qs ? `?${qs}` : "/", { scroll: false });
+    },
+    [searchParams, router]
+  );
 
   const allCategories = useMemo(
     () =>
@@ -32,20 +55,21 @@ export function BookList({ books }: { books: Book[] }) {
 
   function toggleSort(field: SortField) {
     if (sortField === field) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      updateParams({ dir: sortDir === "asc" ? "desc" : "asc" });
     } else {
-      setSortField(field);
-      setSortDir(field === "language" ? "desc" : "asc");
+      updateParams({ sort: field, dir: field === "language" ? "desc" : "asc" });
     }
   }
 
   function toggleCategory(cat: string) {
-    setSelectedCategories((prev) => {
-      const next = new Set(prev);
-      if (next.has(cat)) next.delete(cat);
-      else next.add(cat);
-      return next;
-    });
+    const next = new Set(selectedCategories);
+    if (next.has(cat)) next.delete(cat);
+    else next.add(cat);
+    updateParams({ cat: next.size > 0 ? [...next].join(",") : null });
+  }
+
+  function clearCategories() {
+    updateParams({ cat: null });
   }
 
   const filtered = useMemo(() => {
@@ -106,7 +130,7 @@ export function BookList({ books }: { books: Book[] }) {
           type="text"
           placeholder="Search by title or author..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => updateParams({ q: e.target.value || null })}
           className="w-full sm:max-w-xs px-3 py-2 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
         />
       </div>
@@ -128,7 +152,7 @@ export function BookList({ books }: { books: Book[] }) {
         ))}
         {selectedCategories.size > 0 && (
           <button
-            onClick={() => setSelectedCategories(new Set())}
+            onClick={clearCategories}
             className="px-2 py-0.5 sm:px-2.5 sm:py-1 text-xs rounded-full text-neutral-400 hover:text-neutral-600"
           >
             Clear
