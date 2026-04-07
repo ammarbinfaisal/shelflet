@@ -1,7 +1,7 @@
-import { db } from "@/lib/db";
-import { books } from "@/lib/db/schema";
+import { apiFetch } from "@/lib/db";
 
 export async function GET() {
-  const allBooks = await db.select().from(books);
-  return Response.json({ books: allBooks, count: allBooks.length });
+  const res = await apiFetch("/api/books");
+  const data = await res.json();
+  return Response.json(data);
 }

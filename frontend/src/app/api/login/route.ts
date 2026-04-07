@@ -1,20 +1,35 @@
 import { cookies } from "next/headers";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://api.books.ammarfaisal.me";
+
 export async function POST(request: Request) {
-  const { password } = await request.json();
+  const body = await request.json();
 
-  if (password !== process.env.ADMIN_PASSWORD) {
-    return Response.json({ error: "Wrong password" }, { status: 401 });
-  }
-
-  const cookieStore = await cookies();
-  cookieStore.set("admin_session", password, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 7, // 1 week
-    path: "/",
+  const res = await fetch(`${API_BASE}/api/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
 
-  return Response.json({ success: true });
+  const data = await res.json();
+
+  if (res.ok && data.success) {
+    // Extract the admin_session cookie from the API response
+    const setCookieHeader = res.headers.get("set-cookie");
+    if (setCookieHeader) {
+      const match = setCookieHeader.match(/admin_session=([^;]+)/);
+      if (match) {
+        const cookieStore = await cookies();
+        cookieStore.set("admin_session", match[1], {
+          httpOnly: true,
+          secure: true,
+          sameSite: "lax",
+          path: "/",
+          maxAge: 60 * 60 * 24 * 7,
+        });
+      }
+    }
+  }
+
+  return Response.json(data, { status: res.status });
 }

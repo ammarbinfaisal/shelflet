@@ -1,5 +1,12 @@
-import { sql } from "@vercel/postgres";
-import { drizzle } from "drizzle-orm/vercel-postgres";
-import * as schema from "./schema";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://api.books.ammarfaisal.me";
 
-export const db = drizzle(sql, { schema });
+export async function apiFetch(path: string, init?: RequestInit) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...init?.headers,
+    },
+  });
+  return res;
+}

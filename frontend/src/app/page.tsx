@@ -1,10 +1,21 @@
 import { connection } from "next/server";
-import { db } from "@/lib/db";
-import { books } from "@/lib/db/schema";
+import { apiFetch } from "@/lib/db";
+
+type Book = {
+  id: number;
+  title: string;
+  author: string;
+  explanation: string;
+  language: string;
+  category: string;
+  lentTo: string;
+  createdAt: string;
+};
 
 export default async function HomePage() {
   await connection();
-  const allBooks = await db.select().from(books);
+  const res = await apiFetch("/api/books");
+  const { books: allBooks }: { books: Book[] } = await res.json();
   const count = allBooks.length;
   const available = allBooks.filter((b) => !b.lentTo);
   const lentOut = allBooks.filter((b) => b.lentTo);
