@@ -19,6 +19,16 @@ sqlite.exec(`
   )
 `);
 
+// Auto-create authors table if it doesn't exist
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS authors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    short_name TEXT NOT NULL,
+    full_name TEXT NOT NULL,
+    bio TEXT DEFAULT ''
+  )
+`);
+
 // Add hidden column if it doesn't exist
 try {
   sqlite.exec(`ALTER TABLE books ADD COLUMN hidden INTEGER DEFAULT 0`);

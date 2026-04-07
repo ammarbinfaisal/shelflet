@@ -2,12 +2,21 @@ export type Book = {
   id: number;
   title: string;
   author: string;
+  authorFullName: string;
+  authorShortName: string;
   explanation: string;
   language: string;
   category: string;
   lentTo: string;
   hidden: number;
   createdAt: string;
+};
+
+export type Author = {
+  id: number;
+  shortName: string;
+  fullName: string;
+  bio: string;
 };
 
 export type LendingLog = {

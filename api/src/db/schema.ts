@@ -22,6 +22,14 @@ export const lendingLogs = sqliteTable("lending_logs", {
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
 });
 
+export const authors = sqliteTable("authors", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  shortName: text("short_name").notNull(),
+  fullName: text("full_name").notNull(),
+  bio: text("bio").default(""),
+});
+
 export type Book = typeof books.$inferSelect;
 export type NewBook = typeof books.$inferInsert;
 export type LendingLog = typeof lendingLogs.$inferSelect;
+export type Author = typeof authors.$inferSelect;

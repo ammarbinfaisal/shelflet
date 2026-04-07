@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { db } from "./db/index.js";
-import { books, lendingLogs } from "./db/schema.js";
+import { books, lendingLogs, authors } from "./db/schema.js";
 import { eq, desc } from "drizzle-orm";
 
 const app = new Hono();
@@ -18,13 +18,43 @@ app.use("/*", cors({
 // Health check
 app.get("/health", (c) => c.json({ status: "ok" }));
 
-// List books (public — excludes hidden)
+// List books (public — excludes hidden), enriched with author info
 app.get("/api/books", (c) => {
   const showAll = c.req.query("all") === "1" && isAuthed(c);
   const allBooks = showAll
     ? db.select().from(books).all()
     : db.select().from(books).where(eq(books.hidden, 0)).all();
-  return c.json({ books: allBooks, count: allBooks.length });
+  const allAuthors = db.select().from(authors).all();
+  const authorMap = new Map(allAuthors.map((a) => [a.shortName, a]));
+
+  const enriched = allBooks.map((b) => {
+    const authorInfo = authorMap.get(b.author);
+    return {
+      ...b,
+      authorFullName: authorInfo?.fullName || b.author,
+      authorShortName: authorInfo?.shortName || b.author,
+    };
+  });
+
+  return c.json({ books: enriched, count: enriched.length });
+});
+
+// List all authors
+app.get("/api/authors", (c) => {
+  const allAuthors = db.select().from(authors).all();
+  return c.json({ authors: allAuthors });
+});
+
+// Get single author by short name (URL slug)
+app.get("/api/authors/:slug", (c) => {
+  const slug = decodeURIComponent(c.req.param("slug"));
+  const author = db.select().from(authors).where(eq(authors.shortName, slug)).get();
+  if (!author) return c.json({ error: "Author not found" }, 404);
+  const authorBooks = db.select().from(books)
+    .where(eq(books.author, author.shortName))
+    .all()
+    .filter((b) => !b.hidden);
+  return c.json({ author, books: authorBooks });
 });
 
 // Login
@@ -152,7 +182,6 @@ app.post("/api/lending-logs/:id/note", async (c) => {
   const { note } = await c.req.json();
   const log = db.select().from(lendingLogs).where(eq(lendingLogs.id, id)).get();
   if (!log) return c.json({ error: "Log not found" }, 404);
-  // Append note with timestamp
   const timestamp = new Date().toISOString();
   const existingNote = log.note || "";
   const newNote = existingNote

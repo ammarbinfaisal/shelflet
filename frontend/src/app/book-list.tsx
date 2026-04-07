@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import type { Book } from "@/lib/db/schema";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -402,7 +403,9 @@ export function BookList({ books }: { books: Book[] }) {
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="font-medium text-sm">{book.title}</p>
-                <p className="text-xs text-neutral-500">{book.author}</p>
+                <Link href={`/author/${encodeURIComponent(book.authorShortName || book.author)}`} className="text-xs text-neutral-500 hover:text-neutral-700 hover:underline">
+                  {book.authorShortName || book.author}
+                </Link>
               </div>
               {book.lentTo ? (
                 <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700">
@@ -548,7 +551,11 @@ export function BookList({ books }: { books: Book[] }) {
             {filtered.map((book) => (
               <tr key={book.id} className="hover:bg-neutral-50 transition-colors">
                 <td className="px-4 py-3 font-medium truncate">{book.title}</td>
-                <td className="px-4 py-3 text-neutral-600 truncate">{book.author}</td>
+                <td className="px-4 py-3 text-neutral-600 truncate">
+                  <Link href={`/author/${encodeURIComponent(book.authorShortName || book.author)}`} className="hover:text-neutral-900 hover:underline">
+                    {book.authorFullName || book.author}
+                  </Link>
+                </td>
                 <td className="px-4 py-3 text-neutral-500 text-xs truncate">{book.explanation}</td>
                 <td className="px-4 py-3 text-neutral-500 truncate">{book.category}</td>
                 <td className="px-4 py-3 text-neutral-500">{book.language}</td>
