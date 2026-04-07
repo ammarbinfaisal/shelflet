@@ -296,8 +296,8 @@ export function BookList({ books }: { books: Book[] }) {
   const available = filtered.filter((b) => !b.lentTo);
   const lentOut = filtered.filter((b) => b.lentTo);
 
-  const SortHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
-    <th className="px-4 py-3 font-medium">
+  const SortHeader = ({ field, children, className }: { field: SortField; children: React.ReactNode; className?: string }) => (
+    <th className={`px-4 py-3 font-medium ${className || ""}`}>
       <div className="flex items-center gap-1">
         <button
           className="cursor-pointer select-none hover:text-neutral-700 flex items-center"
@@ -316,14 +316,16 @@ export function BookList({ books }: { books: Book[] }) {
     options,
     selected,
     filterKey,
+    className,
   }: {
     field: SortField;
     children: React.ReactNode;
     options: string[];
     selected: Set<string>;
     filterKey: keyof Pick<Filters, "categories" | "languages" | "authors">;
+    className?: string;
   }) => (
-    <th className="px-4 py-3 font-medium">
+    <th className={`px-4 py-3 font-medium ${className || ""}`}>
       <div className="flex items-center gap-1.5">
         <button
           className="cursor-pointer select-none hover:text-neutral-700 flex items-center"
@@ -523,7 +525,15 @@ export function BookList({ books }: { books: Book[] }) {
 
       {/* Desktop: table layout */}
       <div className="hidden sm:block overflow-x-auto rounded-lg border border-neutral-200">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm table-fixed">
+          <colgroup>
+            <col className="w-[25%]" />  {/* Title */}
+            <col className="w-[18%]" />  {/* Author */}
+            <col className="w-[18%]" />  {/* Info */}
+            <col className="w-[16%]" />  {/* Category */}
+            <col className="w-[10%]" />  {/* Language */}
+            <col className="w-[13%]" />  {/* Status */}
+          </colgroup>
           <thead>
             <tr className="bg-neutral-50 text-left text-neutral-500">
               <SortHeader field="title">Title</SortHeader>
@@ -537,10 +547,10 @@ export function BookList({ books }: { books: Book[] }) {
           <tbody className="divide-y divide-neutral-100">
             {filtered.map((book) => (
               <tr key={book.id} className="hover:bg-neutral-50 transition-colors">
-                <td className="px-4 py-3 font-medium">{book.title}</td>
-                <td className="px-4 py-3 text-neutral-600">{book.author}</td>
-                <td className="px-4 py-3 text-neutral-500 text-xs">{book.explanation}</td>
-                <td className="px-4 py-3 text-neutral-500">{book.category}</td>
+                <td className="px-4 py-3 font-medium truncate">{book.title}</td>
+                <td className="px-4 py-3 text-neutral-600 truncate">{book.author}</td>
+                <td className="px-4 py-3 text-neutral-500 text-xs truncate">{book.explanation}</td>
+                <td className="px-4 py-3 text-neutral-500 truncate">{book.category}</td>
                 <td className="px-4 py-3 text-neutral-500">{book.language}</td>
                 <td className="px-4 py-3">
                   {book.lentTo ? (
