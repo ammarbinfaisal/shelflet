@@ -2,11 +2,11 @@ services:
   api:
     build: .
     ports:
-      - "3001:3001"
+      - "3002:3002"
     volumes:
       - shelflet-data:/data
     environment:
-      - PORT=3001
+      - PORT=3002
       - DB_PATH=/data/shelflet.db
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
       - NODE_ENV=production
