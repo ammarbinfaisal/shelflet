@@ -1,9 +1,12 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { books } from "./db/schema.js";
-import * as XLSX from "xlsx";
+import { createRequire } from "module";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
+
+const require = createRequire(import.meta.url);
+const XLSX = require("xlsx");
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dbPath = process.env.DB_PATH || "/data/shelflet.db";
@@ -29,7 +32,7 @@ sqlite.exec(`
 
 const workbook = XLSX.readFile(xlsxPath);
 const sheet = workbook.Sheets[workbook.SheetNames[0]];
-const rows = XLSX.utils.sheet_to_json<any>(sheet);
+const rows: any[] = XLSX.utils.sheet_to_json(sheet);
 
 console.log(`Seeding ${rows.length} books from books.xlsx...`);
 
