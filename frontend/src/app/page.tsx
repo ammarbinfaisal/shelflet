@@ -1,7 +1,9 @@
+import { connection } from "next/server";
 import { db } from "@/lib/db";
 import { books } from "@/lib/db/schema";
 
 export default async function HomePage() {
+  await connection();
   const allBooks = await db.select().from(books);
   const count = allBooks.length;
   const available = allBooks.filter((b) => !b.lentTo);
