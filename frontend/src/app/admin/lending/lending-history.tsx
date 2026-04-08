@@ -4,6 +4,8 @@ import { useState, useCallback } from "react";
 import Link from "next/link";
 import { useMountEffect } from "@/lib/hooks";
 
+const API = process.env.NEXT_PUBLIC_API_URL || "https://api.books.ammarfaisal.me";
+
 type LendingLog = {
   id: number;
   bookId: number;
@@ -39,9 +41,10 @@ function NoteSection({ log, onNoteAdded }: { log: LendingLog; onNoteAdded: () =>
   async function addNote() {
     if (!note.trim()) return;
     setSaving(true);
-    await fetch(`/api/lending-logs/${log.id}/note`, {
+    await fetch(`${API}/api/lending-logs/${log.id}/note`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ note: note.trim() }),
     });
     setNote("");
@@ -119,7 +122,7 @@ export function LendingHistory() {
   const [filter, setFilter] = useState<"all" | "lend" | "return">("all");
 
   const fetchLogs = useCallback(async () => {
-    const res = await fetch("/api/lending-logs");
+    const res = await fetch(`${API}/api/lending-logs`, { credentials: "include" });
     const data = await res.json();
     setLogs(data.logs || []);
     setLoading(false);

@@ -10,8 +10,27 @@ const app = new Hono();
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin";
 
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[''ʿ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+function bookSlug(b: { title: string; author: string; category: string; explanation: string | null; language: string | null }): string {
+  const parts = [
+    slugify(b.title),
+    slugify(b.author || "unknown"),
+    slugify((b.category || "").split(",")[0].trim() || "uncategorized"),
+    slugify((b.explanation || "").slice(0, 40) || "none"),
+    slugify(b.language || "unknown"),
+  ];
+  return parts.join("--");
+}
+
 app.use("/*", cors({
-  origin: process.env.CORS_ORIGIN || "*",
+  origin: process.env.CORS_ORIGIN || "https://books.ammarfaisal.me",
   credentials: true,
 }));
 
@@ -31,12 +50,127 @@ app.get("/api/books", (c) => {
     const authorInfo = authorMap.get(b.author);
     return {
       ...b,
+      slug: bookSlug(b),
       authorFullName: authorInfo?.fullName || b.author,
       authorShortName: authorInfo?.shortName || b.author,
     };
   });
 
   return c.json({ books: enriched, count: enriched.length });
+});
+
+// Get single book by slug
+app.get("/api/books/by-slug/:slug", (c) => {
+  const slug = c.req.param("slug");
+  const allBooks = db.select().from(books).all();
+  const allAuthors = db.select().from(authors).all();
+  const authorMap = new Map(allAuthors.map((a) => [a.shortName, a]));
+
+  const book = allBooks.find((b) => bookSlug(b) === slug);
+  if (!book) return c.json({ error: "Book not found" }, 404);
+
+  const authorInfo = authorMap.get(book.author);
+  return c.json({
+    book: {
+      ...book,
+      slug: bookSlug(book),
+      authorFullName: authorInfo?.fullName || book.author,
+      authorShortName: authorInfo?.shortName || book.author,
+    },
+  });
+});
+
+// List categories
+app.get("/api/categories", (c) => {
+  const allBooks = db.select().from(books).where(eq(books.hidden, 0)).all();
+  const catMap = new Map<string, number>();
+  for (const b of allBooks) {
+    for (const cat of (b.category || "").split(",").map((s) => s.trim()).filter(Boolean)) {
+      catMap.set(cat, (catMap.get(cat) || 0) + 1);
+    }
+  }
+  const categories = [...catMap.entries()]
+    .map(([name, count]) => ({ name, slug: slugify(name), count }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return c.json({ categories });
+});
+
+// Get books by category
+app.get("/api/categories/:slug", (c) => {
+  const slug = c.req.param("slug");
+  const allBooks = db.select().from(books).where(eq(books.hidden, 0)).all();
+  const allAuthors = db.select().from(authors).all();
+  const authorMap = new Map(allAuthors.map((a) => [a.shortName, a]));
+
+  // Find the category name matching this slug
+  const allCats = new Set<string>();
+  for (const b of allBooks) {
+    for (const cat of (b.category || "").split(",").map((s) => s.trim()).filter(Boolean)) {
+      allCats.add(cat);
+    }
+  }
+  const categoryName = [...allCats].find((c) => slugify(c) === slug);
+  if (!categoryName) return c.json({ error: "Category not found" }, 404);
+
+  const catBooks = allBooks
+    .filter((b) => (b.category || "").split(",").map((s) => s.trim()).includes(categoryName))
+    .map((b) => {
+      const authorInfo = authorMap.get(b.author);
+      return {
+        ...b,
+        slug: bookSlug(b),
+        authorFullName: authorInfo?.fullName || b.author,
+        authorShortName: authorInfo?.shortName || b.author,
+      };
+    });
+
+  return c.json({ category: categoryName, books: catBooks });
+});
+
+// List languages
+app.get("/api/languages", (c) => {
+  const allBooks = db.select().from(books).where(eq(books.hidden, 0)).all();
+  const langMap = new Map<string, number>();
+  for (const b of allBooks) {
+    for (const lang of (b.language || "").split(",").map((s) => s.trim()).filter(Boolean)) {
+      langMap.set(lang, (langMap.get(lang) || 0) + 1);
+    }
+  }
+  const languages = [...langMap.entries()]
+    .map(([name, count]) => ({ name, slug: slugify(name), count }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return c.json({ languages });
+});
+
+// Get books by language
+app.get("/api/languages/:slug", (c) => {
+  const slug = c.req.param("slug");
+  const allBooks = db.select().from(books).where(eq(books.hidden, 0)).all();
+  const allAuthors = db.select().from(authors).all();
+  const authorMap = new Map(allAuthors.map((a) => [a.shortName, a]));
+
+  const allLangs = new Set<string>();
+  for (const b of allBooks) {
+    for (const lang of (b.language || "").split(",").map((s) => s.trim()).filter(Boolean)) {
+      allLangs.add(lang);
+    }
+  }
+  const languageName = [...allLangs].find((l) => slugify(l) === slug);
+  if (!languageName) return c.json({ error: "Language not found" }, 404);
+
+  const langBooks = allBooks
+    .filter((b) => (b.language || "").split(",").map((s) => s.trim()).includes(languageName))
+    .map((b) => {
+      const authorInfo = authorMap.get(b.author);
+      return {
+        ...b,
+        slug: bookSlug(b),
+        authorFullName: authorInfo?.fullName || b.author,
+        authorShortName: authorInfo?.shortName || b.author,
+      };
+    });
+
+  return c.json({ language: languageName, books: langBooks });
 });
 
 // List all authors

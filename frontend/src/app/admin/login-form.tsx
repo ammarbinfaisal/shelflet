@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 
+const API = process.env.NEXT_PUBLIC_API_URL || "https://api.books.ammarfaisal.me";
+
 type LoginState = { error?: string } | null;
 
 async function loginAction(
@@ -9,15 +11,25 @@ async function loginAction(
   formData: FormData
 ): Promise<LoginState> {
   const password = formData.get("password") as string;
-  const res = await fetch("/api/login", {
+
+  // Set cookie on the API domain (for direct API calls)
+  const apiRes = await fetch(`${API}/api/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ password }),
+  });
+
+  if (!apiRes.ok) {
+    return { error: "Wrong password" };
+  }
+
+  // Also set cookie on the Next.js domain (for server component auth check)
+  await fetch("/api/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ password }),
   });
-
-  if (!res.ok) {
-    return { error: "Wrong password" };
-  }
 
   window.location.href = "/admin";
   return null;

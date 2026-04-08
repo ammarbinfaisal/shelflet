@@ -19,6 +19,14 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[''ʿ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
 type SortField = "title" | "author" | "category" | "language";
 type SortDir = "asc" | "desc";
 
@@ -402,8 +410,10 @@ export function BookList({ books }: { books: Book[] }) {
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="font-medium text-sm">{book.title}</p>
-                <Link href={`/author/${encodeURIComponent(book.authorShortName || book.author)}`} className="text-xs text-neutral-500 hover:text-neutral-700 hover:underline">
+                <Link href={`/book/${encodeURIComponent(book.slug)}`} className="font-medium text-sm hover:underline">
+                  {book.title}
+                </Link>
+                <Link href={`/author/${encodeURIComponent(book.authorShortName || book.author)}`} className="text-xs text-neutral-500 hover:text-neutral-700 hover:underline block">
                   {book.authorShortName || book.author}
                 </Link>
               </div>
@@ -418,13 +428,19 @@ export function BookList({ books }: { books: Book[] }) {
               )}
             </div>
             {(book.explanation || book.category) && (
-              <div className="mt-1.5 flex flex-wrap gap-1">
+              <div className="mt-1.5 flex flex-wrap gap-1 items-center">
                 {book.explanation && (
                   <span className="text-[10px] text-neutral-400">{book.explanation}</span>
                 )}
                 {book.category && (
                   <span className="text-[10px] text-neutral-400">
-                    {book.explanation ? " · " : ""}{book.category}
+                    {book.explanation ? " · " : ""}
+                    {(book.category || "").split(",").map((cat) => cat.trim()).filter(Boolean).map((cat, i) => (
+                      <span key={cat}>
+                        {i > 0 && ", "}
+                        <Link href={`/category/${encodeURIComponent(slugify(cat))}`} className="hover:text-neutral-600 hover:underline">{cat}</Link>
+                      </span>
+                    ))}
                   </span>
                 )}
               </div>
@@ -550,15 +566,26 @@ export function BookList({ books }: { books: Book[] }) {
           <tbody className="divide-y divide-neutral-100">
             {filtered.map((book) => (
               <tr key={book.id} className="hover:bg-neutral-50 transition-colors">
-                <td className="px-4 py-3 font-medium truncate">{book.title}</td>
+                <td className="px-4 py-3 font-medium truncate">
+                  <Link href={`/book/${encodeURIComponent(book.slug)}`} className="hover:underline">{book.title}</Link>
+                </td>
                 <td className="px-4 py-3 text-neutral-600 truncate">
                   <Link href={`/author/${encodeURIComponent(book.authorShortName || book.author)}`} className="hover:text-neutral-900 hover:underline">
                     {book.authorFullName || book.author}
                   </Link>
                 </td>
                 <td className="px-4 py-3 text-neutral-500 text-xs truncate">{book.explanation}</td>
-                <td className="px-4 py-3 text-neutral-500 truncate">{book.category}</td>
-                <td className="px-4 py-3 text-neutral-500">{book.language}</td>
+                <td className="px-4 py-3 text-neutral-500 truncate">
+                  {(book.category || "").split(",").map((cat) => cat.trim()).filter(Boolean).map((cat, i) => (
+                    <span key={cat}>
+                      {i > 0 && ", "}
+                      <Link href={`/category/${encodeURIComponent(slugify(cat))}`} className="hover:text-neutral-700 hover:underline">{cat}</Link>
+                    </span>
+                  ))}
+                </td>
+                <td className="px-4 py-3 text-neutral-500">
+                  <Link href={`/language/${encodeURIComponent(slugify(book.language))}`} className="hover:text-neutral-700 hover:underline">{book.language}</Link>
+                </td>
                 <td className="px-4 py-3">
                   {book.lentTo ? (
                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700">

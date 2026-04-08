@@ -20,7 +20,7 @@ sqlite.exec(`
 const db = drizzle(sqlite);
 
 const authorData: { shortName: string; fullName: string }[] = [
-  { shortName: "MIAW", fullName: "Muhammad bin Abdul Wahhab" },
+  { shortName: "Ibn Abdul Wahhab", fullName: "Muhammad bin Abdul Wahhab" },
   { shortName: "Ibn al-Uthaymeen", fullName: "Muhammad bin Saalih al-Uthaymeen" },
   { shortName: "Ibn Baz", fullName: "Abdul Aziz bin Abdullah bin Baz" },
   { shortName: "Ibn al-Qayyim", fullName: "Ibn Qayyim al-Jawziyyah" },
@@ -62,7 +62,7 @@ console.log(`Seeded ${authorData.length} authors.`);
 
 // Fix inconsistent author names in books
 const renames: Record<string, string> = {
-  "MIAW": "MIAW",
+  "MIAW": "Ibn Abdul Wahhab",
   "ibn al-Uthaymeen": "Ibn al-Uthaymeen",
   "ibn Rajab": "Ibn Rajab",
   "ibn Badran": "Ibn Badran",
@@ -78,8 +78,23 @@ const renames: Record<string, string> = {
 for (const [from, to] of Object.entries(renames)) {
   if (from !== to) {
     db.update(books).set({ author: to }).where(eq(books.author, from)).run();
-    console.log(`  Renamed "${from}" -> "${to}"`);
+    console.log(`  Renamed author "${from}" -> "${to}"`);
   }
+}
+
+// Update explanation fields: person names → "Sharh of X"
+const explanationUpdates: Record<string, string> = {
+  "ibn al-Uthaymeen": "Sharh of Ibn al-Uthaymeen",
+  "al-Fawzan": "Sharh of al-Fawzan",
+  "ibn abil-Izz al-hanafi": "Sharh of Ibn Abil-Izz al-Hanafi",
+  "Sulayman bn Abdullah bn MIAW": "Sharh of Sulayman bin Abdullah bin Ibn Abdul Wahhab",
+  "ibn Aqeel": "Sharh of Ibn Aqeel",
+  "lasheen abul-faraj": "Sharh of Lasheen Abul-Faraj",
+};
+
+for (const [from, to] of Object.entries(explanationUpdates)) {
+  db.update(books).set({ explanation: to }).where(eq(books.explanation, from)).run();
+  console.log(`  Explanation "${from}" -> "${to}"`);
 }
 
 console.log("Done.");

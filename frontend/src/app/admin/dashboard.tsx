@@ -6,10 +6,13 @@ import Link from "next/link";
 import type { Book } from "@/lib/db/schema";
 import { ComboboxMulti } from "@/components/combobox-multi";
 
+const API = process.env.NEXT_PUBLIC_API_URL || "https://api.books.ammarfaisal.me";
+
 async function mutate(action: string, data: Record<string, unknown>) {
-  const res = await fetch("/api/books/mutate", {
+  const res = await fetch(`${API}/api/books/mutate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ action, ...data }),
   });
   return res.json();
@@ -347,7 +350,7 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
 
   function refresh() {
     startRefresh(async () => {
-      const res = await fetch("/api/books?all=1");
+      const res = await fetch(`${API}/api/books?all=1`, { credentials: "include" });
       const data = await res.json();
       setBooks(data.books);
     });
@@ -356,7 +359,7 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
   function handleReturn(book: Book) {
     startRefresh(async () => {
       await mutate("return", { id: book.id });
-      const res = await fetch("/api/books?all=1");
+      const res = await fetch(`${API}/api/books?all=1`, { credentials: "include" });
       const data = await res.json();
       setBooks(data.books);
     });
@@ -365,7 +368,7 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
   function handleToggleHide(book: Book) {
     startRefresh(async () => {
       await mutate(book.hidden ? "unhide" : "hide", { id: book.id });
-      const res = await fetch("/api/books?all=1");
+      const res = await fetch(`${API}/api/books?all=1`, { credentials: "include" });
       const data = await res.json();
       setBooks(data.books);
     });
@@ -375,7 +378,7 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
     if (!confirm(`Delete "${book.title}"?`)) return;
     startRefresh(async () => {
       await mutate("delete", { id: book.id });
-      const res = await fetch("/api/books?all=1");
+      const res = await fetch(`${API}/api/books?all=1`, { credentials: "include" });
       const data = await res.json();
       setBooks(data.books);
     });
@@ -383,6 +386,7 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
 
   async function handleLogout() {
     await fetch("/api/logout", { method: "POST" });
+    await fetch(`${API}/api/logout`, { method: "POST", credentials: "include" });
     window.location.href = "/admin";
   }
 
