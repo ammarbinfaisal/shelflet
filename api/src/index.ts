@@ -18,7 +18,7 @@ function slugify(text: string): string {
     .replace(/(^-|-$)/g, "");
 }
 
-function bookSlug(b: { title: string; author: string; category: string; explanation: string | null; language: string | null }): string {
+function bookSlug(b: { title: string; author: string; category: string | null; explanation: string | null; language: string | null }): string {
   const parts = [
     slugify(b.title),
     slugify(b.author || "unknown"),
