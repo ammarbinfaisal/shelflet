@@ -7,6 +7,7 @@ RUN npm install
 
 COPY tsconfig.json ./
 COPY books.xlsx ./
+COPY islamic_books_deduped.jsonl ./
 COPY src/ ./src/
 
 RUN npm run build

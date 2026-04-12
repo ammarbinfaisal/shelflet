@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Lexend } from "next/font/google";
 import Link from "next/link";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 const lexend = Lexend({
@@ -40,6 +41,7 @@ export default function RootLayout({
         <main className="flex-1 max-w-5xl mx-auto w-full px-2 py-4 sm:px-6 sm:py-8">
           {children}
         </main>
+        <Toaster position="top-center" richColors />
       </body>
     </html>
   );

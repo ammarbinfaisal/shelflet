@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -5,6 +6,48 @@ import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { db } from "./db/index.js";
 import { books, lendingLogs, authors } from "./db/schema.js";
 import { eq, desc } from "drizzle-orm";
+import { readFileSync, existsSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+
+// Load local Islamic books database for ISBN/title lookup
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const localBooksPath = join(__dirname, "..", "islamic_books_deduped.jsonl");
+
+interface LocalBook {
+  title: string;
+  vendor: string;
+  sku: string;
+  price: string;
+  handle: string;
+  tags: string[];
+  source: string;
+}
+
+let localBooks: LocalBook[] = [];
+let localBooksByISBN: Map<string, LocalBook> = new Map();
+
+function loadLocalBooks() {
+  if (!existsSync(localBooksPath)) {
+    console.log("No local books database found at", localBooksPath);
+    return;
+  }
+  try {
+    const content = readFileSync(localBooksPath, "utf-8");
+    localBooks = content.trim().split("\n").map(line => JSON.parse(line));
+    // Index by ISBN
+    for (const book of localBooks) {
+      if (book.sku && /^97[89]\d{10}$/.test(book.sku)) {
+        localBooksByISBN.set(book.sku, book);
+      }
+    }
+    console.log(`Loaded ${localBooks.length} local books (${localBooksByISBN.size} with ISBN)`);
+  } catch (err) {
+    console.error("Failed to load local books:", err);
+  }
+}
+
+loadLocalBooks();
 
 const app = new Hono();
 
@@ -187,7 +230,8 @@ app.get("/api/authors/:slug", (c) => {
   const authorBooks = db.select().from(books)
     .where(eq(books.author, author.shortName))
     .all()
-    .filter((b) => !b.hidden);
+    .filter((b) => !b.hidden)
+    .map((b) => ({ ...b, slug: bookSlug(b) }));
   return c.json({ author, books: authorBooks });
 });
 
@@ -314,42 +358,151 @@ app.post("/api/books/mutate", async (c) => {
   }
 });
 
-// ISBN lookup via Open Library
+// Map language codes to full names
+const langMap: Record<string, string> = {
+  en: "English",
+  ar: "Arabic",
+  ur: "Urdu",
+  fr: "French",
+  de: "German",
+  es: "Spanish",
+  it: "Italian",
+  pt: "Portuguese",
+  ru: "Russian",
+  zh: "Chinese",
+  ja: "Japanese",
+  ko: "Korean",
+  hi: "Hindi",
+  bn: "Bengali",
+  tr: "Turkish",
+  fa: "Persian",
+  nl: "Dutch",
+  pl: "Polish",
+  sv: "Swedish",
+  id: "Indonesian",
+  ms: "Malay",
+};
+
+// Try Google Books API
+async function lookupGoogleBooks(isbn: string) {
+  const apiKey = process.env.GOOGLE_BOOKS_API_KEY || "";
+  const url = `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&maxResults=1&printType=books${apiKey ? `&key=${apiKey}` : ""}`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data.items || data.items.length === 0) return null;
+
+  const info = data.items[0].volumeInfo || {};
+  return {
+    isbn,
+    title: info.title || "",
+    author: (info.authors || []).join(", "),
+    publishers: info.publisher ? [info.publisher] : [],
+    publishDate: info.publishedDate || "",
+    subjects: info.categories || [],
+    numberOfPages: info.pageCount || null,
+    description: info.description || "",
+    language: langMap[info.language] || info.language || "",
+    source: "google",
+  };
+}
+
+// Try Open Library API
+async function lookupOpenLibrary(isbn: string) {
+  const res = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
+  if (!res.ok) return null;
+  const data = await res.json();
+
+  // Fetch author names if we have author references
+  let authorName = "";
+  if (data.authors?.length > 0) {
+    const authorKey = data.authors[0].key;
+    const authorRes = await fetch(`https://openlibrary.org${authorKey}.json`);
+    if (authorRes.ok) {
+      const authorData = await authorRes.json();
+      authorName = authorData.name || "";
+    }
+  }
+
+  return {
+    isbn,
+    title: data.title || "",
+    author: authorName,
+    publishers: data.publishers || [],
+    publishDate: data.publish_date || "",
+    subjects: data.subjects?.map((s: string | { name: string }) =>
+      typeof s === "string" ? s : s.name
+    ) || [],
+    numberOfPages: data.number_of_pages || null,
+    description: typeof data.description === "string"
+      ? data.description
+      : data.description?.value || "",
+    language: "",
+    source: "openlibrary",
+  };
+}
+
+// ISBN lookup - tries local DB first, then Google Books, then Open Library
 app.get("/api/isbn/:isbn", async (c) => {
   const isbn = c.req.param("isbn").replace(/[^0-9X]/gi, "");
   if (!isbn || (isbn.length !== 10 && isbn.length !== 13)) {
     return c.json({ error: "Invalid ISBN" }, 400);
   }
+
   try {
-    const res = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
-    if (!res.ok) {
-      return c.json({ error: "Book not found", isbn }, 404);
+    // Try local database first (fastest)
+    const localBook = localBooksByISBN.get(isbn);
+    if (localBook) {
+      return c.json({
+        isbn,
+        title: localBook.title,
+        author: localBook.vendor || "",
+        publishers: [],
+        publishDate: "",
+        subjects: localBook.tags || [],
+        numberOfPages: null,
+        description: "",
+        language: "",
+        source: "local:" + localBook.source,
+      });
     }
-    const data = await res.json();
 
-    // Fetch author names if we have author references
-    let authorName = "";
-    if (data.authors?.length > 0) {
-      const authorKey = data.authors[0].key;
-      const authorRes = await fetch(`https://openlibrary.org${authorKey}.json`);
-      if (authorRes.ok) {
-        const authorData = await authorRes.json();
-        authorName = authorData.name || "";
-      }
+    // Try Google Books
+    const googleResult = await lookupGoogleBooks(isbn);
+    if (googleResult) {
+      return c.json(googleResult);
     }
 
-    return c.json({
-      isbn,
-      title: data.title || "",
-      author: authorName,
-      publishers: data.publishers || [],
-      publishDate: data.publish_date || "",
-      subjects: data.subjects || [],
-      numberOfPages: data.number_of_pages || null,
-    });
+    // Fall back to Open Library
+    const openLibResult = await lookupOpenLibrary(isbn);
+    if (openLibResult) {
+      return c.json(openLibResult);
+    }
+
+    return c.json({ error: "Book not found", isbn }, 404);
   } catch (err) {
     return c.json({ error: "Lookup failed" }, 500);
   }
+});
+
+// Title autocomplete from local books database
+app.get("/api/books/search", (c) => {
+  const q = (c.req.query("q") || "").toLowerCase().trim();
+  if (q.length < 2) {
+    return c.json({ results: [] });
+  }
+
+  const results = localBooks
+    .filter(book => book.title.toLowerCase().includes(q))
+    .slice(0, 20)
+    .map(book => ({
+      title: book.title,
+      author: book.vendor || "",
+      isbn: /^97[89]\d{10}$/.test(book.sku) ? book.sku : "",
+      source: book.source,
+    }));
+
+  return c.json({ results });
 });
 
 // Get lending history

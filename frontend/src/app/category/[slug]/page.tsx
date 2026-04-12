@@ -1,7 +1,14 @@
-import { connection } from "next/server";
 import { apiFetch } from "@/lib/db";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+
+export const revalidate = 60; // Revalidate every 60 seconds
+
+export async function generateStaticParams() {
+  const res = await apiFetch("/api/categories");
+  const { categories } = await res.json();
+  return categories.map((c: { slug: string }) => ({ slug: c.slug }));
+}
 
 function slugify(text: string): string {
   return text
@@ -25,7 +32,6 @@ type CategoryBook = {
 };
 
 export default async function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {
-  await connection();
   const { slug } = await params;
   const res = await apiFetch(`/api/categories/${encodeURIComponent(slug)}`);
 

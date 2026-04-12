@@ -25,6 +25,8 @@ sqlite.exec(`
     explanation TEXT DEFAULT '',
     language TEXT DEFAULT 'English',
     category TEXT DEFAULT '',
+    isbn TEXT DEFAULT '',
+    published TEXT DEFAULT '',
     lent_to TEXT DEFAULT '',
     hidden INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))

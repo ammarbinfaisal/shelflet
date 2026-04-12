@@ -5,10 +5,13 @@ services:
       - "3002:3002"
     volumes:
       - shelflet-data:/data
+    env_file:
+      - .env
     environment:
       - PORT=3002
       - DB_PATH=/data/shelflet.db
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY:-}
       - NODE_ENV=production
     restart: unless-stopped
 

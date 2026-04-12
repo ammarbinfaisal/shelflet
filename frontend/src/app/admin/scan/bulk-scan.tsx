@@ -2,6 +2,7 @@
 
 import { useState, useRef, useTransition, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { ComboboxMulti } from "@/components/combobox-multi";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://api.books.ammarfaisal.me";
@@ -68,20 +69,123 @@ function IconCamera({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
+// Title autocomplete with local JSONL search
+type BookSuggestion = {
+  title: string;
+  author: string;
+  isbn: string;
+  source: string;
+};
+
+function TitleAutocomplete({
+  value,
+  onChange,
+  onSelect,
+  placeholder = "Title",
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  onSelect: (book: BookSuggestion) => void;
+  placeholder?: string;
+}) {
+  const [suggestions, setSuggestions] = useState<BookSuggestion[]>([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const search = useCallback(async (q: string) => {
+    if (q.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/api/books/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      setSuggestions(data.results || []);
+      setIsOpen(true);
+    } catch {
+      setSuggestions([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    onChange(val);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => search(val), 200);
+  };
+
+  const handleSelect = (book: BookSuggestion) => {
+    onChange(book.title);
+    onSelect(book);
+    setIsOpen(false);
+    setSuggestions([]);
+  };
+
+  return (
+    <div className="relative">
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        onChange={handleChange}
+        onFocus={() => suggestions.length > 0 && setIsOpen(true)}
+        onBlur={() => setTimeout(() => setIsOpen(false), 150)}
+        placeholder={placeholder}
+        className="input-field w-full"
+      />
+      {loading && (
+        <div className="absolute right-2 top-1/2 -translate-y-1/2">
+          <div className="w-4 h-4 border-2 border-neutral-300 border-t-neutral-600 rounded-full animate-spin" />
+        </div>
+      )}
+      {isOpen && suggestions.length > 0 && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-neutral-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {suggestions.map((book, i) => (
+            <button
+              key={`${book.title}-${i}`}
+              type="button"
+              onMouseDown={() => handleSelect(book)}
+              className="w-full px-3 py-2 text-left hover:bg-neutral-50 border-b border-neutral-100 last:border-0"
+            >
+              <p className="text-sm font-medium truncate">{book.title}</p>
+              <p className="text-xs text-neutral-500 truncate">
+                {book.author || "Unknown author"}
+                {book.isbn && <span className="ml-2 text-neutral-400">ISBN: {book.isbn}</span>}
+              </p>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Camera barcode scanner using native BarcodeDetector or quagga2 fallback
 function CameraScanner({
   onDetected,
   onClose,
+  scannedCount,
+  scannedISBNs,
 }: {
-  onDetected: (isbn: string) => void;
+  onDetected: (isbn: string) => Promise<{ found: boolean; title?: string }>;
   onClose: () => void;
+  scannedCount: number;
+  scannedISBNs: Set<string>;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const scanningRef = useRef(false);
+  const scanningRef = useRef(true);
   const quaggaRef = useRef<any>(null);
+  const lastScannedRef = useRef<string>("");
+  const cooldownRef = useRef(false);
 
   const stopCamera = useCallback(() => {
     scanningRef.current = false;
@@ -98,14 +202,42 @@ function CameraScanner({
   }, []);
 
   const handleDetected = useCallback(
-    (isbn: string) => {
-      if (!scanningRef.current) return;
-      scanningRef.current = false;
-      stopCamera();
-      onDetected(isbn);
-      onClose();
+    async (isbn: string) => {
+      // Prevent duplicate scans within cooldown period
+      if (cooldownRef.current || isbn === lastScannedRef.current) return;
+
+      const cleanISBN = isbn.replace(/[^0-9X]/gi, "");
+      if (!cleanISBN || (cleanISBN.length !== 10 && cleanISBN.length !== 13)) return;
+
+      // Check if already scanned in this session
+      if (scannedISBNs.has(cleanISBN)) {
+        toast.warning(`Already scanned: ${cleanISBN}`);
+        return;
+      }
+
+      lastScannedRef.current = cleanISBN;
+      cooldownRef.current = true;
+
+      const toastId = toast.loading(`Looking up ${cleanISBN}...`);
+      const result = await onDetected(cleanISBN);
+
+      if (result.found) {
+        toast.success(result.title || cleanISBN, {
+          id: toastId,
+          description: "Found — added to list",
+        });
+      } else {
+        toast.error(`Not found: ${cleanISBN}`, {
+          id: toastId,
+          description: "Manual entry needed",
+        });
+      }
+
+      setTimeout(() => {
+        cooldownRef.current = false;
+      }, 1500);
     },
-    [onDetected, onClose, stopCamera]
+    [onDetected, scannedISBNs]
   );
 
   useEffect(() => {
@@ -116,7 +248,6 @@ function CameraScanner({
       video.srcObject = stream;
       await video.play();
       setIsLoading(false);
-      scanningRef.current = true;
 
       const detector = new (window as any).BarcodeDetector({
         formats: ["ean_13", "ean_8"],
@@ -128,7 +259,6 @@ function CameraScanner({
           const barcodes = await detector.detect(videoRef.current);
           if (barcodes.length > 0) {
             handleDetected(barcodes[0].rawValue);
-            return;
           }
         } catch {}
         animationId = requestAnimationFrame(scan);
@@ -168,7 +298,6 @@ function CameraScanner({
       });
 
       setIsLoading(false);
-      scanningRef.current = true;
       Quagga.start();
 
       Quagga.onDetected((result: any) => {
@@ -208,7 +337,7 @@ function CameraScanner({
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
       <div className="flex items-center justify-between p-4 bg-black/80">
-        <h2 className="text-white font-medium">Scan ISBN Barcode</h2>
+        <h2 className="text-white font-medium">Scan ISBN Barcodes</h2>
         <button
           onClick={() => {
             stopCamera();
@@ -240,18 +369,32 @@ function CameraScanner({
         {/* Scan guide overlay */}
         {!error && !isLoading && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-64 h-32 border-2 border-white/50 rounded-lg">
-              <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-white rounded-tl" />
-              <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-white rounded-tr" />
-              <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-white rounded-bl" />
-              <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-white rounded-br" />
+            <div className="w-64 h-32 border-2 border-white/50 rounded-lg relative">
+              <div className="absolute -top-0.5 -left-0.5 w-4 h-4 border-t-2 border-l-2 border-white rounded-tl" />
+              <div className="absolute -top-0.5 -right-0.5 w-4 h-4 border-t-2 border-r-2 border-white rounded-tr" />
+              <div className="absolute -bottom-0.5 -left-0.5 w-4 h-4 border-b-2 border-l-2 border-white rounded-bl" />
+              <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 border-b-2 border-r-2 border-white rounded-br" />
             </div>
           </div>
         )}
-      </div>
 
-      <div className="p-4 bg-black/80 text-center text-white/70 text-sm">
-        Point camera at the barcode on the book
+        </div>
+
+      <div className="p-4 bg-black/80 flex items-center justify-between">
+        <span className="text-white/70 text-sm">
+          Point camera at barcodes to scan
+        </span>
+        {scannedCount > 0 && (
+          <button
+            onClick={() => {
+              stopCamera();
+              onClose();
+            }}
+            className="bg-white text-black px-4 py-2 rounded-lg font-medium text-sm"
+          >
+            View {scannedCount} book{scannedCount !== 1 ? "s" : ""}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -286,15 +429,18 @@ export function BulkScan({
     ]),
   ].sort();
 
-  async function lookupISBN(isbn: string) {
+  // Track scanned ISBNs for duplicate detection
+  const scannedISBNs = new Set(books.map((b) => b.isbn));
+
+  async function lookupISBN(isbn: string): Promise<{ found: boolean; title?: string }> {
     const cleanISBN = isbn.replace(/[^0-9X]/gi, "");
     if (!cleanISBN || (cleanISBN.length !== 10 && cleanISBN.length !== 13)) {
-      return;
+      return { found: false };
     }
 
     // Check if already scanned
     if (books.some((b) => b.isbn === cleanISBN)) {
-      return;
+      return { found: false };
     }
 
     const id = crypto.randomUUID();
@@ -324,21 +470,26 @@ export function BulkScan({
                   ...b,
                   title: data.title || "",
                   author: data.author || "",
-                  explanation: data.publishDate ? `Published: ${data.publishDate}` : "",
+                  explanation: data.description || "",
+                  categories: data.subjects || [],
+                  languages: data.language ? [data.language] : ["English"],
                   status: "found",
                 }
               : b
           )
         );
+        return { found: true, title: data.title };
       } else {
         setBooks((prev) =>
           prev.map((b) => (b.id === id ? { ...b, status: "not-found" } : b))
         );
+        return { found: false };
       }
     } catch {
       setBooks((prev) =>
         prev.map((b) => (b.id === id ? { ...b, status: "error" } : b))
       );
+      return { found: false };
     }
   }
 
@@ -411,10 +562,10 @@ export function BulkScan({
       {/* Camera Scanner */}
       {showScanner && (
         <CameraScanner
-          onDetected={(isbn) => {
-            lookupISBN(isbn);
-          }}
+          onDetected={lookupISBN}
           onClose={() => setShowScanner(false)}
+          scannedCount={books.length}
+          scannedISBNs={scannedISBNs}
         />
       )}
 
@@ -532,11 +683,16 @@ export function BulkScan({
               {book.expanded && book.status !== "loading" && (
                 <div className="px-3 pb-3 pt-0 border-t border-border/50">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
-                    <input
+                    <TitleAutocomplete
                       value={book.title}
-                      onChange={(e) => updateBook(book.id, { title: e.target.value })}
-                      placeholder="Title"
-                      className="input-field"
+                      onChange={(val) => updateBook(book.id, { title: val })}
+                      onSelect={(suggestion) => {
+                        updateBook(book.id, {
+                          title: suggestion.title,
+                          author: suggestion.author,
+                        });
+                      }}
+                      placeholder="Title (type to search)"
                     />
                     <input
                       value={book.author}

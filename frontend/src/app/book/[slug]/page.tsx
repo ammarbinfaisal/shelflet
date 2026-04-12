@@ -1,7 +1,14 @@
-import { connection } from "next/server";
 import { apiFetch } from "@/lib/db";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+
+export const revalidate = 60;
+
+export async function generateStaticParams() {
+  const res = await apiFetch("/api/books");
+  const { books } = await res.json();
+  return books.map((b: { slug: string }) => ({ slug: b.slug }));
+}
 
 function slugify(text: string): string {
   return text
@@ -21,11 +28,12 @@ type BookDetail = {
   explanation: string;
   language: string;
   category: string;
+  isbn: string;
+  published: string;
   lentTo: string;
 };
 
 export default async function BookPage({ params }: { params: Promise<{ slug: string }> }) {
-  await connection();
   const { slug } = await params;
   const res = await apiFetch(`/api/books/by-slug/${encodeURIComponent(slug)}`);
 
@@ -101,6 +109,20 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
               </span>
             ))}
           </p>
+
+          {book.isbn && (
+            <p className="text-sm text-neutral-600">
+              <span className="text-neutral-400">ISBN: </span>
+              {book.isbn}
+            </p>
+          )}
+
+          {book.published && (
+            <p className="text-sm text-neutral-600">
+              <span className="text-neutral-400">Published: </span>
+              {book.published}
+            </p>
+          )}
 
           <p className="text-sm">
             <span className="text-neutral-400">Status: </span>

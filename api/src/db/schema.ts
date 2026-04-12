@@ -7,6 +7,8 @@ export const books = sqliteTable("books", {
   explanation: text("explanation").default(""),
   language: text("language").default("English"),
   category: text("category").default(""),
+  isbn: text("isbn").default(""),
+  published: text("published").default(""),
   lentTo: text("lent_to").default(""),
   hidden: integer("hidden").default(0),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
