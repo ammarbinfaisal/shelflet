@@ -211,20 +211,17 @@ export function BulkScan({
       {/* ISBN Input */}
       <div className="mb-4 sm:mb-6">
         <div className="flex gap-2">
-          <div className="relative flex-1">
-            <IconBarcode className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
-            <input
-              ref={inputRef}
-              type="text"
-              inputMode="numeric"
-              value={isbnInput}
-              onChange={(e) => setIsbnInput(e.target.value)}
-              onKeyDown={handleInputKeyDown}
-              placeholder="Scan or type ISBN..."
-              className="input-field w-full pl-10"
-              autoFocus
-            />
-          </div>
+          <input
+            ref={inputRef}
+            type="text"
+            inputMode="numeric"
+            value={isbnInput}
+            onChange={(e) => setIsbnInput(e.target.value)}
+            onKeyDown={handleInputKeyDown}
+            placeholder="Type or scan ISBN..."
+            className="input-field flex-1"
+            autoFocus
+          />
           <button
             onClick={() => {
               lookupISBN(isbnInput);
