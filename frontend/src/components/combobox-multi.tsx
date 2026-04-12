@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   Popover,
@@ -16,6 +16,18 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
+
+function useIsMobile(breakpoint = 640) {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    setIsMobile(mql.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, [breakpoint]);
+  return isMobile;
+}
 
 interface ComboboxMultiProps {
   options: string[];
@@ -36,6 +48,7 @@ export function ComboboxMulti({
 }: ComboboxMultiProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const isMobile = useIsMobile();
 
   function toggle(value: string) {
     if (selected.includes(value)) {
@@ -89,7 +102,7 @@ export function ComboboxMulti({
               placeholder="Search or type new..."
               value={search}
               onValueChange={setSearch}
-              autoFocus={false}
+              autoFocus={!isMobile}
             />
             <CommandList>
               <CommandEmpty>
