@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useRef, useTransition } from "react";
+import { useState, useRef, useTransition, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { ComboboxMulti } from "@/components/combobox-multi";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://api.books.ammarfaisal.me";
+const QUAGGA_CDN = "https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js";
 
 type ScannedBook = {
   id: string;
@@ -58,6 +59,213 @@ function IconSave({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
+function IconCamera({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
+
+// Camera barcode scanner using native BarcodeDetector or quagga2 fallback
+function CameraScanner({
+  onDetected,
+  onClose,
+}: {
+  onDetected: (isbn: string) => void;
+  onClose: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const scanningRef = useRef(false);
+  const quaggaRef = useRef<any>(null);
+
+  const stopCamera = useCallback(() => {
+    scanningRef.current = false;
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (quaggaRef.current) {
+      try {
+        quaggaRef.current.stop();
+      } catch {}
+      quaggaRef.current = null;
+    }
+  }, []);
+
+  const handleDetected = useCallback(
+    (isbn: string) => {
+      if (!scanningRef.current) return;
+      scanningRef.current = false;
+      stopCamera();
+      onDetected(isbn);
+      onClose();
+    },
+    [onDetected, onClose, stopCamera]
+  );
+
+  useEffect(() => {
+    let animationId: number;
+
+    async function startNativeScanner(stream: MediaStream) {
+      const video = videoRef.current!;
+      video.srcObject = stream;
+      await video.play();
+      setIsLoading(false);
+      scanningRef.current = true;
+
+      const detector = new (window as any).BarcodeDetector({
+        formats: ["ean_13", "ean_8"],
+      });
+
+      async function scan() {
+        if (!scanningRef.current || !videoRef.current) return;
+        try {
+          const barcodes = await detector.detect(videoRef.current);
+          if (barcodes.length > 0) {
+            handleDetected(barcodes[0].rawValue);
+            return;
+          }
+        } catch {}
+        animationId = requestAnimationFrame(scan);
+      }
+      scan();
+    }
+
+    async function startQuaggaScanner() {
+      // Dynamically load quagga2 from CDN
+      if (!(window as any).Quagga) {
+        const script = document.createElement("script");
+        script.src = QUAGGA_CDN;
+        script.async = true;
+        await new Promise<void>((resolve, reject) => {
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error("Failed to load scanner"));
+          document.head.appendChild(script);
+        });
+      }
+
+      const Quagga = (window as any).Quagga;
+      quaggaRef.current = Quagga;
+
+      await new Promise<void>((resolve, reject) => {
+        Quagga.init(
+          {
+            inputStream: {
+              type: "LiveStream",
+              target: videoRef.current!.parentElement,
+              constraints: {
+                facingMode: "environment",
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+              },
+            },
+            decoder: {
+              readers: ["ean_reader", "ean_8_reader"],
+            },
+            locate: true,
+          },
+          (err: any) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+
+      setIsLoading(false);
+      scanningRef.current = true;
+      Quagga.start();
+
+      Quagga.onDetected((result: any) => {
+        if (result?.codeResult?.code) {
+          handleDetected(result.codeResult.code);
+        }
+      });
+    }
+
+    async function init() {
+      try {
+        // Check for native BarcodeDetector
+        if ("BarcodeDetector" in window) {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+          });
+          streamRef.current = stream;
+          await startNativeScanner(stream);
+        } else {
+          // Fallback to quagga2
+          await startQuaggaScanner();
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Camera access denied");
+        setIsLoading(false);
+      }
+    }
+
+    init();
+
+    return () => {
+      cancelAnimationFrame(animationId);
+      stopCamera();
+    };
+  }, [handleDetected, stopCamera]);
+
+  return (
+    <div className="fixed inset-0 bg-black z-50 flex flex-col">
+      <div className="flex items-center justify-between p-4 bg-black/80">
+        <h2 className="text-white font-medium">Scan ISBN Barcode</h2>
+        <button
+          onClick={() => {
+            stopCamera();
+            onClose();
+          }}
+          className="text-white p-2"
+        >
+          <IconX className="w-6 h-6" />
+        </button>
+      </div>
+
+      <div className="flex-1 relative overflow-hidden">
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center text-white">
+            Loading camera...
+          </div>
+        )}
+        {error && (
+          <div className="absolute inset-0 flex items-center justify-center text-red-400 p-4 text-center">
+            {error}
+          </div>
+        )}
+        <video
+          ref={videoRef}
+          className="w-full h-full object-cover"
+          playsInline
+          muted
+        />
+        {/* Scan guide overlay */}
+        {!error && !isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="w-64 h-32 border-2 border-white/50 rounded-lg">
+              <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-white rounded-tl" />
+              <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-white rounded-tr" />
+              <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-white rounded-bl" />
+              <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-white rounded-br" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="p-4 bg-black/80 text-center text-white/70 text-sm">
+        Point camera at the barcode on the book
+      </div>
+    </div>
+  );
+}
+
 export function BulkScan({
   initialCategories,
   initialLanguages,
@@ -69,6 +277,7 @@ export function BulkScan({
   const [isbnInput, setIsbnInput] = useState("");
   const [isSaving, startSaving] = useTransition();
   const [saveResult, setSaveResult] = useState<{ success?: boolean; message?: string } | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Collect all categories from initial + any added in this session
@@ -208,6 +417,16 @@ export function BulkScan({
         </div>
       </div>
 
+      {/* Camera Scanner */}
+      {showScanner && (
+        <CameraScanner
+          onDetected={(isbn) => {
+            lookupISBN(isbn);
+          }}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
+
       {/* ISBN Input */}
       <div className="mb-4 sm:mb-6">
         <div className="flex gap-2">
@@ -222,6 +441,14 @@ export function BulkScan({
             className="input-field flex-1"
             autoFocus
           />
+          <button
+            onClick={() => setShowScanner(true)}
+            className="btn-secondary flex items-center gap-1.5"
+            title="Scan with camera"
+          >
+            <IconCamera className="w-5 h-5" />
+            <span className="hidden sm:inline">Scan</span>
+          </button>
           <button
             onClick={() => {
               lookupISBN(isbnInput);
