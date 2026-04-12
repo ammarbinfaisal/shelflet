@@ -293,8 +293,62 @@ app.post("/api/books/mutate", async (c) => {
       db.update(books).set({ hidden: 0 }).where(eq(books.id, data.id)).run();
       return c.json({ success: true });
     }
+    case "bulk-add": {
+      if (!Array.isArray(data.books)) return c.json({ error: "books array required" }, 400);
+      let added = 0;
+      for (const book of data.books) {
+        if (!book.title) continue;
+        db.insert(books).values({
+          title: book.title,
+          author: book.author || "",
+          explanation: book.explanation || "",
+          language: book.language || "English",
+          category: book.category || "",
+        }).run();
+        added++;
+      }
+      return c.json({ success: true, added });
+    }
     default:
       return c.json({ error: "Unknown action" }, 400);
+  }
+});
+
+// ISBN lookup via Open Library
+app.get("/api/isbn/:isbn", async (c) => {
+  const isbn = c.req.param("isbn").replace(/[^0-9X]/gi, "");
+  if (!isbn || (isbn.length !== 10 && isbn.length !== 13)) {
+    return c.json({ error: "Invalid ISBN" }, 400);
+  }
+  try {
+    const res = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
+    if (!res.ok) {
+      return c.json({ error: "Book not found", isbn }, 404);
+    }
+    const data = await res.json();
+
+    // Fetch author names if we have author references
+    let authorName = "";
+    if (data.authors?.length > 0) {
+      const authorKey = data.authors[0].key;
+      const authorRes = await fetch(`https://openlibrary.org${authorKey}.json`);
+      if (authorRes.ok) {
+        const authorData = await authorRes.json();
+        authorName = authorData.name || "";
+      }
+    }
+
+    return c.json({
+      isbn,
+      title: data.title || "",
+      author: authorName,
+      publishers: data.publishers || [],
+      publishDate: data.publish_date || "",
+      subjects: data.subjects || [],
+      numberOfPages: data.number_of_pages || null,
+    });
+  } catch (err) {
+    return c.json({ error: "Lookup failed" }, 500);
   }
 });
 
