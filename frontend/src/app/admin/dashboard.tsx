@@ -84,6 +84,14 @@ function IconHistory({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
+function IconBarcode({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h2v16H3V4zm4 0h1v16H7V4zm3 0h2v16h-2V4zm4 0h3v16h-3V4zm5 0h2v16h-2V4z" />
+    </svg>
+  );
+}
+
 function IconEyeOff({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -395,6 +403,14 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <h1 className="text-lg sm:text-2xl font-bold">Dashboard</h1>
         <div className="flex gap-1.5 sm:gap-2">
+          <Link
+            href="/admin/scan"
+            className="icon-btn"
+            title="Bulk Scan"
+          >
+            <IconBarcode />
+            <span className="hidden sm:inline">Scan</span>
+          </Link>
           <Link
             href="/admin/lending"
             className="icon-btn"
