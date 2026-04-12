@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ComboboxMulti } from "@/components/combobox-multi";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "https://api.books.ammarfaisal.me";
-const QUAGGA_CDN = "https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js";
+const QUAGGA_CDN = "https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/+esm";
 
 type ScannedBook = {
   id: string;
@@ -137,19 +137,10 @@ function CameraScanner({
     }
 
     async function startQuaggaScanner() {
-      // Dynamically load quagga2 from CDN
-      if (!(window as any).Quagga) {
-        const script = document.createElement("script");
-        script.src = QUAGGA_CDN;
-        script.async = true;
-        await new Promise<void>((resolve, reject) => {
-          script.onload = () => resolve();
-          script.onerror = () => reject(new Error("Failed to load scanner"));
-          document.head.appendChild(script);
-        });
-      }
-
-      const Quagga = (window as any).Quagga;
+      // Dynamically import quagga2 from CDN (not bundled)
+      const { default: Quagga } = await import(
+        /* webpackIgnore: true */ QUAGGA_CDN
+      );
       quaggaRef.current = Quagga;
 
       await new Promise<void>((resolve, reject) => {
