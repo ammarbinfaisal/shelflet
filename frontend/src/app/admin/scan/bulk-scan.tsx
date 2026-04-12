@@ -441,6 +441,8 @@ function ScannedBookItem({
   onRemove: () => void;
   onToggleExpanded: () => void;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
+
   return (
     <div
       className={`border rounded-lg overflow-hidden ${
@@ -453,13 +455,13 @@ function ScannedBookItem({
     >
       {/* Header row */}
       <div
-        className="flex items-center gap-2 p-3 cursor-pointer"
-        onClick={onToggleExpanded}
+        className={`flex items-center gap-2 p-3 ${isEditing ? "cursor-default" : "cursor-pointer"}`}
+        onClick={() => !isEditing && onToggleExpanded()}
       >
         <IconChevron
           className={`w-4 h-4 text-muted-foreground transition-transform ${
             book.expanded ? "rotate-90" : ""
-          }`}
+          } ${isEditing ? "opacity-30" : ""}`}
           down={book.expanded}
         />
         <div className="flex-1 min-w-0">
@@ -484,9 +486,10 @@ function ScannedBookItem({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onRemove();
+            if (!isEditing) onRemove();
           }}
-          className="p-1.5 rounded hover:bg-neutral-100 text-muted-foreground"
+          disabled={isEditing}
+          className={`p-1.5 rounded text-muted-foreground ${isEditing ? "opacity-30 cursor-not-allowed" : "hover:bg-neutral-100"}`}
         >
           <IconX className="w-4 h-4" />
         </button>
@@ -494,7 +497,11 @@ function ScannedBookItem({
 
       {/* Expanded edit form */}
       {book.expanded && book.status !== "loading" && (
-        <div className="px-3 pb-3 pt-0 border-t border-border/50">
+        <div
+          className="px-3 pb-3 pt-0 border-t border-border/50"
+          onFocus={() => setIsEditing(true)}
+          onBlur={() => setIsEditing(false)}
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
             <TitleAutocomplete
               value={book.title}
