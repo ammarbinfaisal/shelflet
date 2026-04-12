@@ -1,14 +1,10 @@
-import { apiFetch } from "@/lib/db";
-import { notFound } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
-
-export const revalidate = 60; // Revalidate every 60 seconds
-
-export async function generateStaticParams() {
-  const res = await apiFetch("/api/categories");
-  const { categories } = await res.json();
-  return categories.map((c: { slug: string }) => ({ slug: c.slug }));
-}
+import { useAuthFetch } from "@/lib/auth";
+import { AuthGate } from "@/components/auth-gate";
 
 function slugify(text: string): string {
   return text
@@ -31,13 +27,38 @@ type CategoryBook = {
   lentTo: string;
 };
 
-export default async function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  const res = await apiFetch(`/api/categories/${encodeURIComponent(slug)}`);
+function CategoryContent() {
+  const params = useParams();
+  const slug = params.slug as string;
+  const authFetch = useAuthFetch();
+  const [category, setCategory] = useState<string>("");
+  const [books, setBooks] = useState<CategoryBook[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  if (!res.ok) notFound();
+  useEffect(() => {
+    if (!slug) return;
 
-  const { category, books }: { category: string; books: CategoryBook[] } = await res.json();
+    authFetch(`/api/categories/${encodeURIComponent(slug)}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Category not found");
+        return res.json();
+      })
+      .then((data) => {
+        setCategory(data.category);
+        setBooks(data.books || []);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setIsLoading(false));
+  }, [slug, authFetch]);
+
+  if (isLoading) {
+    return <div className="text-center py-8 text-neutral-400">Loading...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center py-8 text-red-500">{error}</div>;
+  }
 
   return (
     <div>
@@ -149,5 +170,13 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
         </table>
       </div>
     </div>
+  );
+}
+
+export default function CategoryPage() {
+  return (
+    <AuthGate>
+      <CategoryContent />
+    </AuthGate>
   );
 }

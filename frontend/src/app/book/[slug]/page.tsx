@@ -1,14 +1,10 @@
-import { apiFetch } from "@/lib/db";
-import { notFound } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
-
-export const revalidate = 60;
-
-export async function generateStaticParams() {
-  const res = await apiFetch("/api/books");
-  const { books } = await res.json();
-  return books.map((b: { slug: string }) => ({ slug: b.slug }));
-}
+import { useAuthFetch } from "@/lib/auth";
+import { AuthGate } from "@/components/auth-gate";
 
 function slugify(text: string): string {
   return text
@@ -33,13 +29,35 @@ type BookDetail = {
   lentTo: string;
 };
 
-export default async function BookPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  const res = await apiFetch(`/api/books/by-slug/${encodeURIComponent(slug)}`);
+function BookContent() {
+  const params = useParams();
+  const slug = params.slug as string;
+  const authFetch = useAuthFetch();
+  const [book, setBook] = useState<BookDetail | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  if (!res.ok) notFound();
+  useEffect(() => {
+    if (!slug) return;
 
-  const { book }: { book: BookDetail } = await res.json();
+    authFetch(`/api/books/by-slug/${encodeURIComponent(slug)}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Book not found");
+        return res.json();
+      })
+      .then((data) => setBook(data.book))
+      .catch((err) => setError(err.message))
+      .finally(() => setIsLoading(false));
+  }, [slug, authFetch]);
+
+  if (isLoading) {
+    return <div className="text-center py-8 text-neutral-400">Loading book...</div>;
+  }
+
+  if (error || !book) {
+    return <div className="text-center py-8 text-red-500">{error || "Book not found"}</div>;
+  }
+
   const categories = (book.category || "").split(",").map((s) => s.trim()).filter(Boolean);
   const languages = (book.language || "").split(",").map((s) => s.trim()).filter(Boolean);
 
@@ -139,5 +157,13 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
         </div>
       </div>
     </div>
+  );
+}
+
+export default function BookPage() {
+  return (
+    <AuthGate>
+      <BookContent />
+    </AuthGate>
   );
 }

@@ -3,6 +3,7 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
+import { SignJWT, jwtVerify } from "jose";
 import { db } from "./db/index.js";
 import { books, lendingLogs, authors } from "./db/schema.js";
 import { eq, desc } from "drizzle-orm";
@@ -52,6 +53,11 @@ loadLocalBooks();
 const app = new Hono();
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin";
+const PUBLIC_PASSWORD = process.env.PUBLIC_PASSWORD || "";
+// Derive JWT secret from the password - changing password invalidates all tokens
+const JWT_SECRET = new TextEncoder().encode(
+  PUBLIC_PASSWORD ? `shelflet-jwt-${PUBLIC_PASSWORD}` : "shelflet-no-auth"
+);
 
 function slugify(text: string): string {
   return text
@@ -77,11 +83,57 @@ app.use("/*", cors({
   credentials: true,
 }));
 
+// Verify public JWT token
+async function verifyPublicToken(c: any): Promise<boolean> {
+  if (!PUBLIC_PASSWORD) return true; // No password required
+
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) return false;
+
+  const token = authHeader.slice(7);
+  try {
+    await jwtVerify(token, JWT_SECRET);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Health check
 app.get("/health", (c) => c.json({ status: "ok" }));
 
+// Check if public password is required
+app.get("/api/auth/status", (c) => {
+  return c.json({ requiresAuth: !!PUBLIC_PASSWORD });
+});
+
+// Public login - returns JWT
+app.post("/api/public-login", async (c) => {
+  if (!PUBLIC_PASSWORD) {
+    return c.json({ error: "Public auth not configured" }, 400);
+  }
+
+  const { password } = await c.req.json();
+  if (password !== PUBLIC_PASSWORD) {
+    return c.json({ error: "Wrong password" }, 401);
+  }
+
+  const token = await new SignJWT({ type: "public" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("7d")
+    .sign(JWT_SECRET);
+
+  return c.json({ success: true, token });
+});
+
 // List books (public — excludes hidden), enriched with author info
-app.get("/api/books", (c) => {
+app.get("/api/books", async (c) => {
+  // Check public auth if PUBLIC_PASSWORD is set
+  if (PUBLIC_PASSWORD && !await verifyPublicToken(c) && !isAuthed(c)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
   const showAll = c.req.query("all") === "1" && isAuthed(c);
   const allBooks = showAll
     ? db.select().from(books).all()
@@ -103,7 +155,11 @@ app.get("/api/books", (c) => {
 });
 
 // Get single book by slug
-app.get("/api/books/by-slug/:slug", (c) => {
+app.get("/api/books/by-slug/:slug", async (c) => {
+  if (PUBLIC_PASSWORD && !await verifyPublicToken(c) && !isAuthed(c)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
   const slug = c.req.param("slug");
   const allBooks = db.select().from(books).all();
   const allAuthors = db.select().from(authors).all();
@@ -124,7 +180,11 @@ app.get("/api/books/by-slug/:slug", (c) => {
 });
 
 // List categories
-app.get("/api/categories", (c) => {
+app.get("/api/categories", async (c) => {
+  if (PUBLIC_PASSWORD && !await verifyPublicToken(c) && !isAuthed(c)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
   const allBooks = db.select().from(books).where(eq(books.hidden, 0)).all();
   const catMap = new Map<string, number>();
   for (const b of allBooks) {
@@ -139,7 +199,11 @@ app.get("/api/categories", (c) => {
 });
 
 // Get books by category
-app.get("/api/categories/:slug", (c) => {
+app.get("/api/categories/:slug", async (c) => {
+  if (PUBLIC_PASSWORD && !await verifyPublicToken(c) && !isAuthed(c)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
   const slug = c.req.param("slug");
   const allBooks = db.select().from(books).where(eq(books.hidden, 0)).all();
   const allAuthors = db.select().from(authors).all();
@@ -171,7 +235,11 @@ app.get("/api/categories/:slug", (c) => {
 });
 
 // List languages
-app.get("/api/languages", (c) => {
+app.get("/api/languages", async (c) => {
+  if (PUBLIC_PASSWORD && !await verifyPublicToken(c) && !isAuthed(c)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
   const allBooks = db.select().from(books).where(eq(books.hidden, 0)).all();
   const langMap = new Map<string, number>();
   for (const b of allBooks) {
@@ -186,7 +254,11 @@ app.get("/api/languages", (c) => {
 });
 
 // Get books by language
-app.get("/api/languages/:slug", (c) => {
+app.get("/api/languages/:slug", async (c) => {
+  if (PUBLIC_PASSWORD && !await verifyPublicToken(c) && !isAuthed(c)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
   const slug = c.req.param("slug");
   const allBooks = db.select().from(books).where(eq(books.hidden, 0)).all();
   const allAuthors = db.select().from(authors).all();
@@ -217,13 +289,21 @@ app.get("/api/languages/:slug", (c) => {
 });
 
 // List all authors
-app.get("/api/authors", (c) => {
+app.get("/api/authors", async (c) => {
+  if (PUBLIC_PASSWORD && !await verifyPublicToken(c) && !isAuthed(c)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
   const allAuthors = db.select().from(authors).all();
   return c.json({ authors: allAuthors });
 });
 
 // Get single author by short name (URL slug)
-app.get("/api/authors/:slug", (c) => {
+app.get("/api/authors/:slug", async (c) => {
+  if (PUBLIC_PASSWORD && !await verifyPublicToken(c) && !isAuthed(c)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
   const slug = decodeURIComponent(c.req.param("slug"));
   const author = db.select().from(authors).where(eq(authors.shortName, slug)).get();
   if (!author) return c.json({ error: "Author not found" }, 404);

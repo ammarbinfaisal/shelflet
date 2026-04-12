@@ -1,14 +1,10 @@
-import { apiFetch } from "@/lib/db";
-import { notFound } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
-
-export const revalidate = 60;
-
-export async function generateStaticParams() {
-  const res = await apiFetch("/api/authors");
-  const { authors } = await res.json();
-  return authors.map((a: { shortName: string }) => ({ slug: a.shortName }));
-}
+import { useAuthFetch } from "@/lib/auth";
+import { AuthGate } from "@/components/auth-gate";
 
 function slugify(text: string): string {
   return text
@@ -28,13 +24,44 @@ type AuthorBook = {
   lentTo: string;
 };
 
-export default async function AuthorPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  const res = await apiFetch(`/api/authors/${encodeURIComponent(slug)}`);
+type Author = {
+  shortName: string;
+  fullName: string;
+  bio?: string;
+};
 
-  if (!res.ok) notFound();
+function AuthorContent() {
+  const params = useParams();
+  const slug = params.slug as string;
+  const authFetch = useAuthFetch();
+  const [author, setAuthor] = useState<Author | null>(null);
+  const [books, setBooks] = useState<AuthorBook[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const { author, books } = await res.json();
+  useEffect(() => {
+    if (!slug) return;
+
+    authFetch(`/api/authors/${encodeURIComponent(slug)}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Author not found");
+        return res.json();
+      })
+      .then((data) => {
+        setAuthor(data.author);
+        setBooks(data.books || []);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setIsLoading(false));
+  }, [slug, authFetch]);
+
+  if (isLoading) {
+    return <div className="text-center py-8 text-neutral-400">Loading...</div>;
+  }
+
+  if (error || !author) {
+    return <div className="text-center py-8 text-red-500">{error || "Author not found"}</div>;
+  }
 
   return (
     <div>
@@ -163,5 +190,13 @@ export default async function AuthorPage({ params }: { params: Promise<{ slug: s
         </table>
       </div>
     </div>
+  );
+}
+
+export default function AuthorPage() {
+  return (
+    <AuthGate>
+      <AuthorContent />
+    </AuthGate>
   );
 }

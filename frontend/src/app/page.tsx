@@ -1,16 +1,42 @@
-import { Suspense } from "react";
-import { apiFetch } from "@/lib/db";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useAuthFetch } from "@/lib/auth";
+import { AuthGate } from "@/components/auth-gate";
 import { BookList } from "./book-list";
 
-export const revalidate = 60;
+function HomeContent() {
+  const authFetch = useAuthFetch();
+  const [books, setBooks] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-export default async function HomePage() {
-  const res = await apiFetch("/api/books");
-  const { books } = await res.json();
+  useEffect(() => {
+    authFetch("/api/books")
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch books");
+        return res.json();
+      })
+      .then((data) => setBooks(data.books || []))
+      .catch((err) => setError(err.message))
+      .finally(() => setIsLoading(false));
+  }, [authFetch]);
 
+  if (isLoading) {
+    return <div className="text-center py-8 text-neutral-400">Loading books...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center py-8 text-red-500">{error}</div>;
+  }
+
+  return <BookList books={books} />;
+}
+
+export default function HomePage() {
   return (
-    <Suspense fallback={<div className="text-center py-8 text-neutral-400">Loading...</div>}>
-      <BookList books={books} />
-    </Suspense>
+    <AuthGate>
+      <HomeContent />
+    </AuthGate>
   );
 }

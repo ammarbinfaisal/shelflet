@@ -1,14 +1,10 @@
-import { apiFetch } from "@/lib/db";
-import { notFound } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
-
-export const revalidate = 60;
-
-export async function generateStaticParams() {
-  const res = await apiFetch("/api/languages");
-  const { languages } = await res.json();
-  return languages.map((l: { slug: string }) => ({ slug: l.slug }));
-}
+import { useAuthFetch } from "@/lib/auth";
+import { AuthGate } from "@/components/auth-gate";
 
 function slugify(text: string): string {
   return text
@@ -31,13 +27,38 @@ type LanguageBook = {
   lentTo: string;
 };
 
-export default async function LanguagePage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  const res = await apiFetch(`/api/languages/${encodeURIComponent(slug)}`);
+function LanguageContent() {
+  const params = useParams();
+  const slug = params.slug as string;
+  const authFetch = useAuthFetch();
+  const [language, setLanguage] = useState<string>("");
+  const [books, setBooks] = useState<LanguageBook[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  if (!res.ok) notFound();
+  useEffect(() => {
+    if (!slug) return;
 
-  const { language, books }: { language: string; books: LanguageBook[] } = await res.json();
+    authFetch(`/api/languages/${encodeURIComponent(slug)}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Language not found");
+        return res.json();
+      })
+      .then((data) => {
+        setLanguage(data.language);
+        setBooks(data.books || []);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setIsLoading(false));
+  }, [slug, authFetch]);
+
+  if (isLoading) {
+    return <div className="text-center py-8 text-neutral-400">Loading...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center py-8 text-red-500">{error}</div>;
+  }
 
   return (
     <div>
@@ -157,5 +178,13 @@ export default async function LanguagePage({ params }: { params: Promise<{ slug:
         </table>
       </div>
     </div>
+  );
+}
+
+export default function LanguagePage() {
+  return (
+    <AuthGate>
+      <LanguageContent />
+    </AuthGate>
   );
 }
