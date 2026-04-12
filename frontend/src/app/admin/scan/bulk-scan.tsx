@@ -202,6 +202,16 @@ function CameraScanner({
   const lastScannedRef = useRef<string>("");
   const cooldownRef = useRef(false);
 
+  // Use refs for values that change but shouldn't restart the scanner
+  const onDetectedRef = useRef(onDetected);
+  const scannedISBNsRef = useRef(scannedISBNs);
+
+  // Keep refs in sync with props
+  useEffect(() => {
+    onDetectedRef.current = onDetected;
+    scannedISBNsRef.current = scannedISBNs;
+  }, [onDetected, scannedISBNs]);
+
   const stopCamera = useCallback(() => {
     scanningRef.current = false;
     if (streamRef.current) {
@@ -224,8 +234,8 @@ function CameraScanner({
       const cleanISBN = isbn.replace(/[^0-9X]/gi, "");
       if (!cleanISBN || (cleanISBN.length !== 10 && cleanISBN.length !== 13)) return;
 
-      // Check if already scanned in this session
-      if (scannedISBNs.has(cleanISBN)) {
+      // Check if already scanned in this session (use ref to avoid re-triggering effect)
+      if (scannedISBNsRef.current.has(cleanISBN)) {
         toast.warning(`Already scanned: ${cleanISBN}`);
         return;
       }
@@ -234,7 +244,7 @@ function CameraScanner({
       cooldownRef.current = true;
 
       const toastId = toast.loading(`Looking up ${cleanISBN}...`);
-      const result = await onDetected(cleanISBN);
+      const result = await onDetectedRef.current(cleanISBN);
 
       if (result.found) {
         toast.success(result.title || cleanISBN, {
@@ -252,7 +262,7 @@ function CameraScanner({
         cooldownRef.current = false;
       }, 1500);
     },
-    [onDetected, scannedISBNs]
+    [] // Stable callback - uses refs for changing values
   );
 
   useEffect(() => {
