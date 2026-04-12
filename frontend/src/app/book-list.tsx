@@ -27,6 +27,172 @@ function slugify(text: string): string {
     .replace(/(^-|-$)/g, "");
 }
 
+// ── Extracted Item Components ────────────────────────
+
+function FilterOption({
+  option,
+  selected,
+  onToggle,
+}: {
+  option: string;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-neutral-50 text-left ${
+        selected ? "font-medium text-neutral-900" : "text-neutral-600"
+      }`}
+    >
+      <span
+        className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+          selected ? "bg-neutral-900 border-neutral-900" : "border-neutral-300"
+        }`}
+      >
+        {selected && (
+          <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        )}
+      </span>
+      {option}
+    </button>
+  );
+}
+
+function FilterChip({
+  option,
+  selected,
+  onToggle,
+}: {
+  option: string;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`px-2.5 py-1.5 text-xs rounded-full transition-colors ${
+        selected
+          ? "bg-neutral-900 text-white"
+          : "bg-neutral-100 text-neutral-600 active:bg-neutral-200"
+      }`}
+    >
+      {option}
+    </button>
+  );
+}
+
+function SortOption({
+  field,
+  currentField,
+  currentDir,
+  onSelect,
+}: {
+  field: SortField;
+  currentField: SortField;
+  currentDir: SortDir;
+  onSelect: () => void;
+}) {
+  const isActive = currentField === field;
+  return (
+    <button
+      onClick={onSelect}
+      className={`flex items-center justify-between w-full px-2 py-1.5 text-xs rounded hover:bg-neutral-50 ${
+        isActive ? "font-medium text-neutral-900" : "text-neutral-600"
+      }`}
+    >
+      <span className="capitalize">{field}</span>
+      {isActive && (
+        <span className="text-[10px] text-neutral-400">{currentDir === "asc" ? "A-Z" : "Z-A"}</span>
+      )}
+    </button>
+  );
+}
+
+function BookCard({ book }: { book: Book }) {
+  return (
+    <div className="border border-neutral-200 rounded-lg p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <Link href={`/book/${encodeURIComponent(book.slug)}`} className="font-medium text-sm hover:underline">
+            {book.title}
+          </Link>
+          <Link href={`/author/${encodeURIComponent(book.authorShortName || book.author)}`} className="text-xs text-neutral-500 hover:text-neutral-700 hover:underline block">
+            {book.authorShortName || book.author}
+          </Link>
+        </div>
+        {book.lentTo ? (
+          <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700">
+            Out
+          </span>
+        ) : (
+          <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700">
+            In
+          </span>
+        )}
+      </div>
+      {(book.explanation || book.category) && (
+        <div className="mt-1.5 flex flex-wrap gap-1 items-center">
+          {book.explanation && (
+            <span className="text-[10px] text-neutral-400">{book.explanation}</span>
+          )}
+          {book.category && (
+            <span className="text-[10px] text-neutral-400">
+              {book.explanation ? " · " : ""}
+              {(book.category || "").split(",").map((cat) => cat.trim()).filter(Boolean).map((cat, i) => (
+                <span key={cat}>
+                  {i > 0 && ", "}
+                  <Link href={`/category/${encodeURIComponent(slugify(cat))}`} className="hover:text-neutral-600 hover:underline">{cat}</Link>
+                </span>
+              ))}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BookTableRow({ book }: { book: Book }) {
+  return (
+    <tr className="hover:bg-neutral-50 transition-colors">
+      <td className="px-4 py-3 font-medium truncate">
+        <Link href={`/book/${encodeURIComponent(book.slug)}`} className="hover:underline">{book.title}</Link>
+      </td>
+      <td className="px-4 py-3 text-neutral-600 truncate">
+        <Link href={`/author/${encodeURIComponent(book.authorShortName || book.author)}`} className="hover:text-neutral-900 hover:underline">
+          {book.authorFullName || book.author}
+        </Link>
+      </td>
+      <td className="px-4 py-3 text-neutral-500 text-xs truncate">{book.explanation}</td>
+      <td className="px-4 py-3 text-neutral-500 truncate">
+        {(book.category || "").split(",").map((cat) => cat.trim()).filter(Boolean).map((cat, i) => (
+          <span key={cat}>
+            {i > 0 && ", "}
+            <Link href={`/category/${encodeURIComponent(slugify(cat))}`} className="hover:text-neutral-700 hover:underline">{cat}</Link>
+          </span>
+        ))}
+      </td>
+      <td className="px-4 py-3 text-neutral-500">
+        <Link href={`/language/${encodeURIComponent(slugify(book.language))}`} className="hover:text-neutral-700 hover:underline">{book.language}</Link>
+      </td>
+      <td className="px-4 py-3">
+        {book.lentTo ? (
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700">
+            Unavailable
+          </span>
+        ) : (
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-green-700">
+            Available
+          </span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
 type SortField = "title" | "author" | "category" | "language";
 type SortDir = "asc" | "desc";
 
@@ -108,26 +274,12 @@ function ColumnFilter({
       <PopoverContent className="w-48 p-0" align="start">
         <div className="max-h-56 overflow-y-auto p-1">
           {options.map((opt) => (
-            <button
+            <FilterOption
               key={opt}
-              onClick={() => onToggle(opt)}
-              className={`flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-neutral-50 text-left ${
-                selected.has(opt) ? "font-medium text-neutral-900" : "text-neutral-600"
-              }`}
-            >
-              <span
-                className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
-                  selected.has(opt) ? "bg-neutral-900 border-neutral-900" : "border-neutral-300"
-                }`}
-              >
-                {selected.has(opt) && (
-                  <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-              </span>
-              {opt}
-            </button>
+              option={opt}
+              selected={selected.has(opt)}
+              onToggle={() => onToggle(opt)}
+            />
           ))}
         </div>
         {hasFilter && (
@@ -163,17 +315,12 @@ function FilterSection({
       <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-2">{label}</p>
       <div className="flex flex-wrap gap-1.5">
         {options.map((opt) => (
-          <button
+          <FilterChip
             key={opt}
-            onClick={() => onToggle(opt)}
-            className={`px-2.5 py-1.5 text-xs rounded-full transition-colors ${
-              selected.has(opt)
-                ? "bg-neutral-900 text-white"
-                : "bg-neutral-100 text-neutral-600 active:bg-neutral-200"
-            }`}
-          >
-            {opt}
-          </button>
+            option={opt}
+            selected={selected.has(opt)}
+            onToggle={() => onToggle(opt)}
+          />
         ))}
       </div>
     </div>
@@ -404,48 +551,7 @@ export function BookList({ books }: { books: Book[] }) {
       {/* Mobile: cards + fixed bottom filter bar */}
       <div className="sm:hidden space-y-2">
         {filtered.map((book) => (
-          <div
-            key={book.id}
-            className="border border-neutral-200 rounded-lg p-3"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <Link href={`/book/${encodeURIComponent(book.slug)}`} className="font-medium text-sm hover:underline">
-                  {book.title}
-                </Link>
-                <Link href={`/author/${encodeURIComponent(book.authorShortName || book.author)}`} className="text-xs text-neutral-500 hover:text-neutral-700 hover:underline block">
-                  {book.authorShortName || book.author}
-                </Link>
-              </div>
-              {book.lentTo ? (
-                <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700">
-                  Out
-                </span>
-              ) : (
-                <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700">
-                  In
-                </span>
-              )}
-            </div>
-            {(book.explanation || book.category) && (
-              <div className="mt-1.5 flex flex-wrap gap-1 items-center">
-                {book.explanation && (
-                  <span className="text-[10px] text-neutral-400">{book.explanation}</span>
-                )}
-                {book.category && (
-                  <span className="text-[10px] text-neutral-400">
-                    {book.explanation ? " · " : ""}
-                    {(book.category || "").split(",").map((cat) => cat.trim()).filter(Boolean).map((cat, i) => (
-                      <span key={cat}>
-                        {i > 0 && ", "}
-                        <Link href={`/category/${encodeURIComponent(slugify(cat))}`} className="hover:text-neutral-600 hover:underline">{cat}</Link>
-                      </span>
-                    ))}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+          <BookCard key={book.id} book={book} />
         ))}
 
         {filtered.length === 0 && (
@@ -524,18 +630,13 @@ export function BookList({ books }: { books: Book[] }) {
             </PopoverTrigger>
             <PopoverContent className="w-40 p-1" align="end" side="top">
               {(["title", "author", "category", "language"] as const).map((f) => (
-                <button
+                <SortOption
                   key={f}
-                  onClick={() => toggleSort(f)}
-                  className={`flex items-center justify-between w-full px-2 py-1.5 text-xs rounded hover:bg-neutral-50 ${
-                    sortField === f ? "font-medium text-neutral-900" : "text-neutral-600"
-                  }`}
-                >
-                  <span className="capitalize">{f}</span>
-                  {sortField === f && (
-                    <span className="text-[10px] text-neutral-400">{sortDir === "asc" ? "A-Z" : "Z-A"}</span>
-                  )}
-                </button>
+                  field={f}
+                  currentField={sortField}
+                  currentDir={sortDir}
+                  onSelect={() => toggleSort(f)}
+                />
               ))}
             </PopoverContent>
           </Popover>
@@ -565,39 +666,7 @@ export function BookList({ books }: { books: Book[] }) {
           </thead>
           <tbody className="divide-y divide-neutral-100">
             {filtered.map((book) => (
-              <tr key={book.id} className="hover:bg-neutral-50 transition-colors">
-                <td className="px-4 py-3 font-medium truncate">
-                  <Link href={`/book/${encodeURIComponent(book.slug)}`} className="hover:underline">{book.title}</Link>
-                </td>
-                <td className="px-4 py-3 text-neutral-600 truncate">
-                  <Link href={`/author/${encodeURIComponent(book.authorShortName || book.author)}`} className="hover:text-neutral-900 hover:underline">
-                    {book.authorFullName || book.author}
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-neutral-500 text-xs truncate">{book.explanation}</td>
-                <td className="px-4 py-3 text-neutral-500 truncate">
-                  {(book.category || "").split(",").map((cat) => cat.trim()).filter(Boolean).map((cat, i) => (
-                    <span key={cat}>
-                      {i > 0 && ", "}
-                      <Link href={`/category/${encodeURIComponent(slugify(cat))}`} className="hover:text-neutral-700 hover:underline">{cat}</Link>
-                    </span>
-                  ))}
-                </td>
-                <td className="px-4 py-3 text-neutral-500">
-                  <Link href={`/language/${encodeURIComponent(slugify(book.language))}`} className="hover:text-neutral-700 hover:underline">{book.language}</Link>
-                </td>
-                <td className="px-4 py-3">
-                  {book.lentTo ? (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700">
-                      Unavailable
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-green-700">
-                      Available
-                    </span>
-                  )}
-                </td>
-              </tr>
+              <BookTableRow key={book.id} book={book} />
             ))}
           </tbody>
         </table>

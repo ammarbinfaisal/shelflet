@@ -77,6 +77,28 @@ type BookSuggestion = {
   source: string;
 };
 
+function SuggestionItem({
+  book,
+  onSelect,
+}: {
+  book: BookSuggestion;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onMouseDown={onSelect}
+      className="w-full px-3 py-2 text-left hover:bg-neutral-50 border-b border-neutral-100 last:border-0"
+    >
+      <p className="text-sm font-medium truncate">{book.title}</p>
+      <p className="text-xs text-neutral-500 truncate">
+        {book.author || "Unknown author"}
+        {book.isbn && <span className="ml-2 text-neutral-400">ISBN: {book.isbn}</span>}
+      </p>
+    </button>
+  );
+}
+
 function TitleAutocomplete({
   value,
   onChange,
@@ -147,18 +169,11 @@ function TitleAutocomplete({
       {isOpen && suggestions.length > 0 && (
         <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-neutral-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {suggestions.map((book, i) => (
-            <button
+            <SuggestionItem
               key={`${book.title}-${i}`}
-              type="button"
-              onMouseDown={() => handleSelect(book)}
-              className="w-full px-3 py-2 text-left hover:bg-neutral-50 border-b border-neutral-100 last:border-0"
-            >
-              <p className="text-sm font-medium truncate">{book.title}</p>
-              <p className="text-xs text-neutral-500 truncate">
-                {book.author || "Unknown author"}
-                {book.isbn && <span className="ml-2 text-neutral-400">ISBN: {book.isbn}</span>}
-              </p>
-            </button>
+              book={book}
+              onSelect={() => handleSelect(book)}
+            />
           ))}
         </div>
       )}
@@ -400,6 +415,125 @@ function CameraScanner({
   );
 }
 
+// Extracted scanned book item component
+function ScannedBookItem({
+  book,
+  allCategories,
+  allLanguages,
+  onUpdate,
+  onRemove,
+  onToggleExpanded,
+}: {
+  book: ScannedBook;
+  allCategories: string[];
+  allLanguages: string[];
+  onUpdate: (updates: Partial<ScannedBook>) => void;
+  onRemove: () => void;
+  onToggleExpanded: () => void;
+}) {
+  return (
+    <div
+      className={`border rounded-lg overflow-hidden ${
+        book.status === "loading"
+          ? "border-neutral-200 bg-neutral-50"
+          : book.status === "not-found" || book.status === "error"
+          ? "border-amber-200 bg-amber-50"
+          : "border-border"
+      }`}
+    >
+      {/* Header row */}
+      <div
+        className="flex items-center gap-2 p-3 cursor-pointer"
+        onClick={onToggleExpanded}
+      >
+        <IconChevron
+          className={`w-4 h-4 text-muted-foreground transition-transform ${
+            book.expanded ? "rotate-90" : ""
+          }`}
+          down={book.expanded}
+        />
+        <div className="flex-1 min-w-0">
+          {book.status === "loading" ? (
+            <p className="text-sm text-muted-foreground animate-pulse">
+              Looking up ISBN {book.isbn}...
+            </p>
+          ) : (
+            <>
+              <p className="font-medium text-sm truncate">
+                {book.title || <span className="text-muted-foreground italic">No title</span>}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {book.author || "Unknown author"} &middot; ISBN: {book.isbn}
+                {book.status === "not-found" && (
+                  <span className="text-amber-600 ml-2">(Not found - enter manually)</span>
+                )}
+              </p>
+            </>
+          )}
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="p-1.5 rounded hover:bg-neutral-100 text-muted-foreground"
+        >
+          <IconX className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Expanded edit form */}
+      {book.expanded && book.status !== "loading" && (
+        <div className="px-3 pb-3 pt-0 border-t border-border/50">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+            <TitleAutocomplete
+              value={book.title}
+              onChange={(val) => onUpdate({ title: val })}
+              onSelect={(suggestion) => {
+                onUpdate({
+                  title: suggestion.title,
+                  author: suggestion.author,
+                });
+              }}
+              placeholder="Title (type to search)"
+            />
+            <input
+              value={book.author}
+              onChange={(e) => onUpdate({ author: e.target.value })}
+              placeholder="Author"
+              className="input-field"
+            />
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Category</label>
+              <ComboboxMulti
+                options={allCategories}
+                selected={book.categories}
+                onChange={(cats) => onUpdate({ categories: cats })}
+                placeholder="Select categories..."
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Language</label>
+              <ComboboxMulti
+                options={allLanguages}
+                selected={book.languages}
+                onChange={(langs) => onUpdate({ languages: langs })}
+                placeholder="Select languages..."
+              />
+            </div>
+            <input
+              value={book.explanation}
+              onChange={(e) => onUpdate({ explanation: e.target.value })}
+              placeholder="Notes"
+              className="input-field sm:col-span-2"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function BulkScan({
   initialCategories,
   initialLanguages,
@@ -628,106 +762,15 @@ export function BulkScan({
       ) : (
         <div className="space-y-2">
           {books.map((book) => (
-            <div
+            <ScannedBookItem
               key={book.id}
-              className={`border rounded-lg overflow-hidden ${
-                book.status === "loading"
-                  ? "border-neutral-200 bg-neutral-50"
-                  : book.status === "not-found" || book.status === "error"
-                  ? "border-amber-200 bg-amber-50"
-                  : "border-border"
-              }`}
-            >
-              {/* Header row */}
-              <div
-                className="flex items-center gap-2 p-3 cursor-pointer"
-                onClick={() => toggleExpanded(book.id)}
-              >
-                <IconChevron
-                  className={`w-4 h-4 text-muted-foreground transition-transform ${
-                    book.expanded ? "rotate-90" : ""
-                  }`}
-                  down={book.expanded}
-                />
-                <div className="flex-1 min-w-0">
-                  {book.status === "loading" ? (
-                    <p className="text-sm text-muted-foreground animate-pulse">
-                      Looking up ISBN {book.isbn}...
-                    </p>
-                  ) : (
-                    <>
-                      <p className="font-medium text-sm truncate">
-                        {book.title || <span className="text-muted-foreground italic">No title</span>}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {book.author || "Unknown author"} &middot; ISBN: {book.isbn}
-                        {book.status === "not-found" && (
-                          <span className="text-amber-600 ml-2">(Not found - enter manually)</span>
-                        )}
-                      </p>
-                    </>
-                  )}
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeBook(book.id);
-                  }}
-                  className="p-1.5 rounded hover:bg-neutral-100 text-muted-foreground"
-                >
-                  <IconX className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Expanded edit form */}
-              {book.expanded && book.status !== "loading" && (
-                <div className="px-3 pb-3 pt-0 border-t border-border/50">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
-                    <TitleAutocomplete
-                      value={book.title}
-                      onChange={(val) => updateBook(book.id, { title: val })}
-                      onSelect={(suggestion) => {
-                        updateBook(book.id, {
-                          title: suggestion.title,
-                          author: suggestion.author,
-                        });
-                      }}
-                      placeholder="Title (type to search)"
-                    />
-                    <input
-                      value={book.author}
-                      onChange={(e) => updateBook(book.id, { author: e.target.value })}
-                      placeholder="Author"
-                      className="input-field"
-                    />
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">Category</label>
-                      <ComboboxMulti
-                        options={allCategories}
-                        selected={book.categories}
-                        onChange={(cats) => updateBook(book.id, { categories: cats })}
-                        placeholder="Select categories..."
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">Language</label>
-                      <ComboboxMulti
-                        options={allLanguages}
-                        selected={book.languages}
-                        onChange={(langs) => updateBook(book.id, { languages: langs })}
-                        placeholder="Select languages..."
-                      />
-                    </div>
-                    <input
-                      value={book.explanation}
-                      onChange={(e) => updateBook(book.id, { explanation: e.target.value })}
-                      placeholder="Notes"
-                      className="input-field sm:col-span-2"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
+              book={book}
+              allCategories={allCategories}
+              allLanguages={allLanguages}
+              onUpdate={(updates) => updateBook(book.id, updates)}
+              onRemove={() => removeBook(book.id)}
+              onToggleExpanded={() => toggleExpanded(book.id)}
+            />
           ))}
         </div>
       )}
