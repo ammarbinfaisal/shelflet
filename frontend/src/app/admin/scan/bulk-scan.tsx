@@ -228,15 +228,20 @@ function CameraScanner({
 
   const handleDetected = useCallback(
     async (isbn: string) => {
-      // Prevent duplicate scans within cooldown period
-      if (cooldownRef.current || isbn === lastScannedRef.current) return;
-
       const cleanISBN = isbn.replace(/[^0-9X]/gi, "");
       if (!cleanISBN || (cleanISBN.length !== 10 && cleanISBN.length !== 13)) return;
 
+      // Only block if same ISBN AND still in cooldown (allows different ISBNs immediately)
+      if (cleanISBN === lastScannedRef.current && cooldownRef.current) return;
+
       // Check if already scanned in this session (use ref to avoid re-triggering effect)
       if (scannedISBNsRef.current.has(cleanISBN)) {
-        toast.warning(`Already scanned: ${cleanISBN}`);
+        if (cleanISBN !== lastScannedRef.current) {
+          toast.warning(`Already scanned: ${cleanISBN}`);
+        }
+        lastScannedRef.current = cleanISBN;
+        cooldownRef.current = true;
+        setTimeout(() => { cooldownRef.current = false; }, 1500);
         return;
       }
 
@@ -244,23 +249,27 @@ function CameraScanner({
       cooldownRef.current = true;
 
       const toastId = toast.loading(`Looking up ${cleanISBN}...`);
-      const result = await onDetectedRef.current(cleanISBN);
+      try {
+        const result = await onDetectedRef.current(cleanISBN);
 
-      if (result.found) {
-        toast.success(result.title || cleanISBN, {
-          id: toastId,
-          description: "Found — added to list",
-        });
-      } else {
-        toast.error(`Not found: ${cleanISBN}`, {
-          id: toastId,
-          description: "Manual entry needed",
-        });
+        if (result.found) {
+          toast.success(result.title || cleanISBN, {
+            id: toastId,
+            description: "Found — added to list",
+          });
+        } else {
+          toast.error(`Not found: ${cleanISBN}`, {
+            id: toastId,
+            description: "Manual entry needed",
+          });
+        }
+      } catch {
+        toast.error(`Error looking up ${cleanISBN}`, { id: toastId });
+      } finally {
+        setTimeout(() => {
+          cooldownRef.current = false;
+        }, 1500);
       }
-
-      setTimeout(() => {
-        cooldownRef.current = false;
-      }, 1500);
     },
     [] // Stable callback - uses refs for changing values
   );
