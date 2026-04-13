@@ -323,8 +323,8 @@ app.post("/api/login", async (c) => {
   }
   setCookie(c, "admin_session", password, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "Lax",
+    secure: true,
+    sameSite: "None",
     maxAge: 60 * 60 * 24 * 7,
     path: "/",
   });
