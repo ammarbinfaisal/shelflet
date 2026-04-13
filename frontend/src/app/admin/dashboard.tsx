@@ -358,27 +358,34 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
 
   function refresh() {
     startRefresh(async () => {
-      const res = await fetch(`${API}/api/books?all=1`, { credentials: "include" });
-      const data = await res.json();
-      setBooks(data.books);
+      const books = await fetchBooks();
+      if (books) setBooks(books);
     });
+  }
+
+  async function fetchBooks() {
+    const res = await fetch(`${API}/api/books?all=1`, { credentials: "include" });
+    if (res.status === 401) {
+      window.location.href = "/admin";
+      return null;
+    }
+    const data = await res.json();
+    return data.books;
   }
 
   function handleReturn(book: Book) {
     startRefresh(async () => {
       await mutate("return", { id: book.id });
-      const res = await fetch(`${API}/api/books?all=1`, { credentials: "include" });
-      const data = await res.json();
-      setBooks(data.books);
+      const books = await fetchBooks();
+      if (books) setBooks(books);
     });
   }
 
   function handleToggleHide(book: Book) {
     startRefresh(async () => {
       await mutate(book.hidden ? "unhide" : "hide", { id: book.id });
-      const res = await fetch(`${API}/api/books?all=1`, { credentials: "include" });
-      const data = await res.json();
-      setBooks(data.books);
+      const books = await fetchBooks();
+      if (books) setBooks(books);
     });
   }
 
@@ -386,9 +393,8 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
     if (!confirm(`Delete "${book.title}"?`)) return;
     startRefresh(async () => {
       await mutate("delete", { id: book.id });
-      const res = await fetch(`${API}/api/books?all=1`, { credentials: "include" });
-      const data = await res.json();
-      setBooks(data.books);
+      const books = await fetchBooks();
+      if (books) setBooks(books);
     });
   }
 
