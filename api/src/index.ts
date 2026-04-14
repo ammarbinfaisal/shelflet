@@ -294,30 +294,49 @@ app.get("/api/languages/:slug", async (c) => {
   return c.json({ language: languageName, books: langBooks });
 });
 
-// List all authors
+// List all authors — unions the authors side-table with distinct author
+// strings that only exist on books, so sites that skip the authors seed
+// still get a full list.
 app.get("/api/authors", async (c) => {
   if (PUBLIC_PASSWORD && !await verifyPublicToken(c) && !isAuthed(c)) {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
   const allAuthors = db.select().from(authors).all();
-  return c.json({ authors: allAuthors });
+  const bySlug = new Map(allAuthors.map((a) => [a.shortName, a]));
+  const bookAuthorNames = db
+    .select({ name: books.author })
+    .from(books)
+    .where(eq(books.hidden, 0))
+    .all();
+  for (const { name } of bookAuthorNames) {
+    if (!name || bySlug.has(name)) continue;
+    bySlug.set(name, { id: 0, shortName: name, fullName: name, bio: "" });
+  }
+  return c.json({ authors: [...bySlug.values()] });
 });
 
-// Get single author by short name (URL slug)
+// Get single author by short name (URL slug). Falls back to the books table
+// when the authors side-table has no explicit row — sites that skip the
+// authors seed still get a working author page.
 app.get("/api/authors/:slug", async (c) => {
   if (PUBLIC_PASSWORD && !await verifyPublicToken(c) && !isAuthed(c)) {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
   const slug = decodeURIComponent(c.req.param("slug"));
-  const author = db.select().from(authors).where(eq(authors.shortName, slug)).get();
-  if (!author) return c.json({ error: "Author not found" }, 404);
+  const authorRow = db.select().from(authors).where(eq(authors.shortName, slug)).get();
   const authorBooks = db.select().from(books)
-    .where(eq(books.author, author.shortName))
+    .where(eq(books.author, slug))
     .all()
     .filter((b) => !b.hidden)
     .map((b) => ({ ...b, slug: bookSlug(b) }));
+
+  if (!authorRow && authorBooks.length === 0) {
+    return c.json({ error: "Author not found" }, 404);
+  }
+
+  const author = authorRow || { id: 0, shortName: slug, fullName: slug, bio: "" };
   return c.json({ author, books: authorBooks });
 });
 

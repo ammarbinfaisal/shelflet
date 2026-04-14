@@ -16,11 +16,23 @@ export interface SiteFeatures {
   copies: boolean;
 }
 
+// Columns on the public book list that can be suppressed per-site.
+// Known values: "info" (the explanation column).
+export type PublicListColumn = "info";
+
 export interface SiteConfig {
   siteName: string;
   siteDescription: string;
   robotsDisallow: boolean;
   features: SiteFeatures;
+  hiddenListColumns: Set<PublicListColumn>;
+}
+
+function csvSet<T extends string>(v: string | undefined): Set<T> {
+  if (!v) return new Set();
+  return new Set(
+    v.split(",").map((s) => s.trim()).filter(Boolean) as T[]
+  );
 }
 
 export const config: SiteConfig = {
@@ -31,4 +43,5 @@ export const config: SiteConfig = {
     translator: flag(process.env.NEXT_PUBLIC_FEATURE_TRANSLATOR),
     copies: flag(process.env.NEXT_PUBLIC_FEATURE_COPIES),
   },
+  hiddenListColumns: csvSet<PublicListColumn>(process.env.NEXT_PUBLIC_HIDE_LIST_COLUMNS),
 };

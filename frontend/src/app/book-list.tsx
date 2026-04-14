@@ -8,6 +8,7 @@ import { config } from "@/lib/config";
 import { Badge } from "@/components/ui/badge";
 
 const FEAT = config.features;
+const HIDE_INFO = config.hiddenListColumns.has("info");
 
 function isAvailable(book: Book): boolean {
   return FEAT.copies ? book.availableCopies > 0 : !book.lentTo;
@@ -148,14 +149,14 @@ function BookCard({ book }: { book: Book }) {
           </span>
         )}
       </div>
-      {(book.explanation || book.category) && (
+      {((!HIDE_INFO && book.explanation) || book.category) && (
         <div className="mt-1.5 flex flex-wrap gap-1 items-center">
-          {book.explanation && (
+          {!HIDE_INFO && book.explanation && (
             <span className="text-[10px] text-neutral-400">{book.explanation}</span>
           )}
           {book.category && (
             <span className="text-[10px] text-neutral-400">
-              {book.explanation ? " · " : ""}
+              {!HIDE_INFO && book.explanation ? " · " : ""}
               {(book.category || "").split(",").map((cat) => cat.trim()).filter(Boolean).map((cat, i) => (
                 <span key={cat}>
                   {i > 0 && ", "}
@@ -181,7 +182,9 @@ function BookTableRow({ book }: { book: Book }) {
           {book.authorFullName || book.author}
         </Link>
       </td>
-      <td className="px-4 py-3 text-neutral-500 text-xs truncate">{book.explanation}</td>
+      {!HIDE_INFO && (
+        <td className="px-4 py-3 text-neutral-500 text-xs truncate">{book.explanation}</td>
+      )}
       <td className="px-4 py-3 text-neutral-500 truncate">
         {(book.category || "").split(",").map((cat) => cat.trim()).filter(Boolean).map((cat, i) => (
           <span key={cat}>
@@ -670,18 +673,18 @@ export function BookList({ books }: { books: Book[] }) {
       <div className="hidden sm:block overflow-x-auto rounded-lg border border-neutral-200">
         <table className="w-full text-sm table-fixed">
           <colgroup>
-            <col className="w-[25%]" />  {/* Title */}
-            <col className="w-[18%]" />  {/* Author */}
-            <col className="w-[18%]" />  {/* Info */}
-            <col className="w-[16%]" />  {/* Category */}
-            <col className="w-[10%]" />  {/* Language */}
-            <col className="w-[13%]" />  {/* Status */}
+            <col className={HIDE_INFO ? "w-[32%]" : "w-[25%]"} />  {/* Title */}
+            <col className={HIDE_INFO ? "w-[24%]" : "w-[18%]"} />  {/* Author */}
+            {!HIDE_INFO && <col className="w-[18%]" />}           {/* Info */}
+            <col className={HIDE_INFO ? "w-[20%]" : "w-[16%]"} />  {/* Category */}
+            <col className={HIDE_INFO ? "w-[12%]" : "w-[10%]"} />  {/* Language */}
+            <col className={HIDE_INFO ? "w-[12%]" : "w-[13%]"} />  {/* Status */}
           </colgroup>
           <thead>
             <tr className="bg-neutral-50 text-left text-neutral-500">
               <SortHeader field="title">Title</SortHeader>
               <FilterableHeader field="author" options={allAuthors} selected={filters.authors} filterKey="authors">Author</FilterableHeader>
-              <th className="px-4 py-3 font-medium">Info</th>
+              {!HIDE_INFO && <th className="px-4 py-3 font-medium">Info</th>}
               <FilterableHeader field="category" options={allCategories} selected={filters.categories} filterKey="categories">Category</FilterableHeader>
               <FilterableHeader field="language" options={allLanguages} selected={filters.languages} filterKey="languages">Language</FilterableHeader>
               <th className="px-4 py-3 font-medium">Status</th>
