@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { config } from "@/lib/config";
 
 export function PublicLoginForm() {
   const { login } = useAuth();
@@ -24,7 +25,7 @@ export function PublicLoginForm() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-neutral-50 px-4">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-center mb-6">Shelflet</h1>
+        <h1 className="text-2xl font-bold text-center mb-6">{config.siteName}</h1>
         <p className="text-neutral-600 text-center mb-6">
           Enter the password to view the book collection.
         </p>

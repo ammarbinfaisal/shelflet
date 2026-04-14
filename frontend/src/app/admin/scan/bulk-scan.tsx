@@ -434,6 +434,8 @@ function CameraScanner({
   );
 }
 
+const AUTHOR_DATALIST_ID = "bulk-scan-author-list";
+
 // Extracted scanned book item component
 function ScannedBookItem({
   book,
@@ -528,6 +530,8 @@ function ScannedBookItem({
               onChange={(e) => onUpdate({ author: e.target.value })}
               placeholder="Author"
               className="input-field"
+              list={AUTHOR_DATALIST_ID}
+              autoComplete="off"
             />
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Category</label>
@@ -563,9 +567,11 @@ function ScannedBookItem({
 export function BulkScan({
   initialCategories,
   initialLanguages,
+  initialAuthors,
 }: {
   initialCategories: string[];
   initialLanguages: string[];
+  initialAuthors: string[];
 }) {
   const [books, setBooks] = useState<ScannedBook[]>([]);
   const [isbnInput, setIsbnInput] = useState("");
@@ -587,6 +593,15 @@ export function BulkScan({
       ...initialLanguages,
       ...books.flatMap((b) => b.languages),
     ]),
+  ].sort();
+
+  const allAuthors = [
+    ...new Set(
+      [
+        ...initialAuthors,
+        ...books.map((b) => b.author.trim()),
+      ].filter(Boolean)
+    ),
   ].sort();
 
   // Track scanned ISBNs for duplicate detection
@@ -709,6 +724,11 @@ export function BulkScan({
 
   return (
     <div className="pb-24 sm:pb-8">
+      <datalist id={AUTHOR_DATALIST_ID}>
+        {allAuthors.map((a) => (
+          <option key={a} value={a} />
+        ))}
+      </datalist>
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <div className="flex items-center gap-2">
           <Link href="/admin" className="icon-btn">

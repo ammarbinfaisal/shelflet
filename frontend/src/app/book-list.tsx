@@ -4,7 +4,14 @@ import { useMemo, useState, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { Book } from "@/lib/db/schema";
+import { config } from "@/lib/config";
 import { Badge } from "@/components/ui/badge";
+
+const FEAT = config.features;
+
+function isAvailable(book: Book): boolean {
+  return FEAT.copies ? book.availableCopies > 0 : !book.lentTo;
+}
 import {
   Popover,
   PopoverContent,
@@ -123,7 +130,11 @@ function BookCard({ book }: { book: Book }) {
             {book.authorShortName || book.author}
           </Link>
         </div>
-        {book.lentTo ? (
+        {FEAT.copies ? (
+          <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium ${isAvailable(book) ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
+            {book.availableCopies}/{book.totalCopies}
+          </span>
+        ) : book.lentTo ? (
           <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700">
             Out
           </span>
@@ -179,7 +190,11 @@ function BookTableRow({ book }: { book: Book }) {
         <Link href={`/language/${encodeURIComponent(slugify(book.language))}`} className="hover:text-neutral-700 hover:underline">{book.language}</Link>
       </td>
       <td className="px-4 py-3">
-        {book.lentTo ? (
+        {FEAT.copies ? (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isAvailable(book) ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
+            {book.availableCopies}/{book.totalCopies} available
+          </span>
+        ) : book.lentTo ? (
           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700">
             Unavailable
           </span>
@@ -449,8 +464,8 @@ export function BookList({ books }: { books: Book[] }) {
     return result;
   }, [books, filters, sortField, sortDir]);
 
-  const available = filtered.filter((b) => !b.lentTo);
-  const lentOut = filtered.filter((b) => b.lentTo);
+  const available = filtered.filter(isAvailable);
+  const lentOut = filtered.filter((b) => !isAvailable(b));
 
   const SortHeader = ({ field, children, className }: { field: SortField; children: React.ReactNode; className?: string }) => (
     <th className={`px-4 py-3 font-medium ${className || ""}`}>

@@ -3,6 +3,7 @@ import { Lexend } from "next/font/google";
 import Link from "next/link";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/lib/auth";
+import { config } from "@/lib/config";
 import "./globals.css";
 
 const lexend = Lexend({
@@ -11,8 +12,11 @@ const lexend = Lexend({
 });
 
 export const metadata: Metadata = {
-  title: "shelflet",
-  description: "Ammar's book collection",
+  title: config.siteName,
+  description: config.siteDescription,
+  robots: config.robotsDisallow
+    ? { index: false, follow: false, nocache: true }
+    : undefined,
 };
 
 export default function RootLayout({
@@ -29,7 +33,7 @@ export default function RootLayout({
         <header className="border-b border-neutral-200 px-3 py-3 sm:px-6 sm:py-4">
           <div className="max-w-5xl mx-auto flex items-center justify-between">
             <Link href="/" className="text-lg sm:text-xl font-semibold tracking-tight">
-              shelflet
+              {config.siteName}
             </Link>
             <Link
               href="/admin"

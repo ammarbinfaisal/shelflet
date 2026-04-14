@@ -2,7 +2,7 @@ services:
   api:
     build: .
     ports:
-      - "3002:3002"
+      - "${HOST_PORT:-3002}:3002"
     volumes:
       - shelflet-data:/data
     env_file:
@@ -11,7 +11,9 @@ services:
       - PORT=3002
       - DB_PATH=/data/shelflet.db
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - PUBLIC_PASSWORD=${PUBLIC_PASSWORD:-}
       - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY:-}
+      - CORS_ORIGIN=${CORS_ORIGIN:-https://books.ammarfaisal.me}
       - NODE_ENV=production
     restart: unless-stopped
 

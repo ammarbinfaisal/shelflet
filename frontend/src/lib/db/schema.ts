@@ -5,12 +5,24 @@ export type Book = {
   author: string;
   authorFullName: string;
   authorShortName: string;
+  translator: string;
   explanation: string;
   language: string;
   category: string;
   lentTo: string;
+  totalCopies: number;
+  availableCopies: number;
   hidden: number;
   createdAt: string;
+};
+
+export type ActiveLending = {
+  id: number;
+  bookId: number;
+  borrower: string;
+  borrowerContact: string;
+  note: string;
+  lentAt: string;
 };
 
 export type Author = {

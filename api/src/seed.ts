@@ -16,24 +16,28 @@ const sqlite = new Database(dbPath);
 sqlite.pragma("journal_mode = WAL");
 const db = drizzle(sqlite);
 
-// Create table
-sqlite.exec(`
+const runDDL = (sql: string) => sqlite.prepare(sql).run();
+
+runDDL(`
   CREATE TABLE IF NOT EXISTS books (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     author TEXT NOT NULL DEFAULT '',
+    translator TEXT DEFAULT '',
     explanation TEXT DEFAULT '',
     language TEXT DEFAULT 'English',
     category TEXT DEFAULT '',
     isbn TEXT DEFAULT '',
     published TEXT DEFAULT '',
     lent_to TEXT DEFAULT '',
+    total_copies INTEGER NOT NULL DEFAULT 1,
+    available_copies INTEGER NOT NULL DEFAULT 1,
     hidden INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   )
 `);
 
-sqlite.exec(`
+runDDL(`
   CREATE TABLE IF NOT EXISTS lending_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     book_id INTEGER NOT NULL,

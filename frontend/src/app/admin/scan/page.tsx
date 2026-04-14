@@ -29,5 +29,17 @@ export default async function ScanPage() {
     )
   )].sort() as string[];
 
-  return <BulkScan initialCategories={categories} initialLanguages={languages} />;
+  const authors = [...new Set(
+    books
+      .map((b: { author?: string }) => (b.author || "").trim())
+      .filter(Boolean)
+  )].sort() as string[];
+
+  return (
+    <BulkScan
+      initialCategories={categories}
+      initialLanguages={languages}
+      initialAuthors={authors}
+    />
+  );
 }

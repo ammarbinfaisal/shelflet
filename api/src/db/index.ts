@@ -29,11 +29,29 @@ sqlite.exec(`
   )
 `);
 
-// Add hidden column if it doesn't exist
-try {
-  sqlite.exec(`ALTER TABLE books ADD COLUMN hidden INTEGER DEFAULT 0`);
-} catch {
-  // Column already exists
+const runDDL = (sql: string) => sqlite.prepare(sql).run();
+
+// Idempotent column adds — ADD COLUMN throws if the column already exists;
+// we swallow per-column so applied migrations don't block later ones.
+const columnMigrations: string[] = [
+  "ALTER TABLE books ADD COLUMN hidden INTEGER DEFAULT 0",
+  "ALTER TABLE books ADD COLUMN translator TEXT DEFAULT ''",
+  "ALTER TABLE books ADD COLUMN total_copies INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE books ADD COLUMN available_copies INTEGER NOT NULL DEFAULT 1",
+];
+for (const ddl of columnMigrations) {
+  try { runDDL(ddl); } catch { /* already exists */ }
 }
+
+runDDL(`
+  CREATE TABLE IF NOT EXISTS active_lendings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id INTEGER NOT NULL,
+    borrower TEXT NOT NULL,
+    borrower_contact TEXT DEFAULT '',
+    note TEXT DEFAULT '',
+    lent_at TEXT DEFAULT (datetime('now'))
+  )
+`);
 
 export const db = drizzle(sqlite, { schema });

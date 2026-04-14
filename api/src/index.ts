@@ -5,8 +5,9 @@ import { cors } from "hono/cors";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { SignJWT, jwtVerify } from "jose";
 import { db } from "./db/index.js";
-import { books, lendingLogs, authors } from "./db/schema.js";
-import { eq, desc } from "drizzle-orm";
+import { books, lendingLogs, authors, activeLendings } from "./db/schema.js";
+import { eq, desc, and } from "drizzle-orm";
+import { config } from "./config.js";
 import { readFileSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -351,30 +352,53 @@ app.post("/api/books/mutate", async (c) => {
   const body = await c.req.json();
   const { action, ...data } = body;
 
+  const copiesOn = config.features.copies;
+  const translatorOn = config.features.translator;
+
+  function bookInsertValues(b: any) {
+    const total = copiesOn ? Math.max(1, parseInt(b.totalCopies ?? 1) || 1) : 1;
+    return {
+      title: b.title,
+      author: b.author || "",
+      translator: translatorOn ? (b.translator || "") : "",
+      explanation: b.explanation || "",
+      language: b.language || "English",
+      category: b.category || "",
+      totalCopies: total,
+      availableCopies: total,
+    };
+  }
+
   switch (action) {
     case "add": {
-      db.insert(books).values({
-        title: data.title,
-        author: data.author,
-        explanation: data.explanation || "",
-        language: data.language || "English",
-        category: data.category || "",
-      }).run();
+      db.insert(books).values(bookInsertValues(data)).run();
       return c.json({ success: true });
     }
     case "edit": {
       if (!data.id) return c.json({ error: "id required" }, 400);
-      db.update(books).set({
+      const existing = db.select().from(books).where(eq(books.id, data.id)).get();
+      if (!existing) return c.json({ error: "Book not found" }, 404);
+
+      const updates: any = {
         title: data.title,
         author: data.author,
         explanation: data.explanation ?? "",
         language: data.language ?? "English",
         category: data.category ?? "",
-      }).where(eq(books.id, data.id)).run();
+      };
+      if (translatorOn) updates.translator = data.translator ?? "";
+      if (copiesOn && data.totalCopies != null) {
+        const newTotal = Math.max(1, parseInt(data.totalCopies) || 1);
+        const delta = newTotal - existing.totalCopies;
+        updates.totalCopies = newTotal;
+        updates.availableCopies = Math.max(0, existing.availableCopies + delta);
+      }
+      db.update(books).set(updates).where(eq(books.id, data.id)).run();
       return c.json({ success: true });
     }
     case "delete": {
       if (!data.id) return c.json({ error: "id required" }, 400);
+      db.delete(activeLendings).where(eq(activeLendings.bookId, data.id)).run();
       db.delete(books).where(eq(books.id, data.id)).run();
       return c.json({ success: true });
     }
@@ -383,7 +407,25 @@ app.post("/api/books/mutate", async (c) => {
         return c.json({ error: "id and lentTo required" }, 400);
       const book = db.select().from(books).where(eq(books.id, data.id)).get();
       if (!book) return c.json({ error: "Book not found" }, 404);
-      db.update(books).set({ lentTo: data.lentTo }).where(eq(books.id, data.id)).run();
+
+      if (copiesOn) {
+        if (book.availableCopies <= 0) {
+          return c.json({ error: "No copies available" }, 409);
+        }
+        db.update(books)
+          .set({ availableCopies: book.availableCopies - 1 })
+          .where(eq(books.id, data.id))
+          .run();
+        db.insert(activeLendings).values({
+          bookId: data.id,
+          borrower: data.lentTo,
+          borrowerContact: data.borrowerContact || "",
+          note: data.note || "",
+        }).run();
+      } else {
+        db.update(books).set({ lentTo: data.lentTo }).where(eq(books.id, data.id)).run();
+      }
+
       db.insert(lendingLogs).values({
         bookId: data.id,
         bookTitle: book.title,
@@ -397,11 +439,39 @@ app.post("/api/books/mutate", async (c) => {
       if (!data.id) return c.json({ error: "id required" }, 400);
       const book = db.select().from(books).where(eq(books.id, data.id)).get();
       if (!book) return c.json({ error: "Book not found" }, 404);
-      db.update(books).set({ lentTo: "" }).where(eq(books.id, data.id)).run();
+
+      let borrowerName = book.lentTo || "unknown";
+
+      if (copiesOn) {
+        // activeLendingId picks the exact copy; otherwise fall back to oldest
+        // active row for that book (matches the most common "mark returned" flow).
+        let lending;
+        if (data.activeLendingId) {
+          lending = db.select().from(activeLendings)
+            .where(and(
+              eq(activeLendings.id, data.activeLendingId),
+              eq(activeLendings.bookId, data.id),
+            )).get();
+        } else {
+          lending = db.select().from(activeLendings)
+            .where(eq(activeLendings.bookId, data.id))
+            .get();
+        }
+        if (!lending) return c.json({ error: "No active lending found" }, 404);
+        borrowerName = lending.borrower;
+        db.delete(activeLendings).where(eq(activeLendings.id, lending.id)).run();
+        db.update(books)
+          .set({ availableCopies: Math.min(book.totalCopies, book.availableCopies + 1) })
+          .where(eq(books.id, data.id))
+          .run();
+      } else {
+        db.update(books).set({ lentTo: "" }).where(eq(books.id, data.id)).run();
+      }
+
       db.insert(lendingLogs).values({
         bookId: data.id,
         bookTitle: book.title,
-        borrower: book.lentTo || "unknown",
+        borrower: borrowerName,
         action: "return",
         note: data.note || "",
       }).run();
@@ -422,13 +492,7 @@ app.post("/api/books/mutate", async (c) => {
       let added = 0;
       for (const book of data.books) {
         if (!book.title) continue;
-        db.insert(books).values({
-          title: book.title,
-          author: book.author || "",
-          explanation: book.explanation || "",
-          language: book.language || "English",
-          category: book.category || "",
-        }).run();
+        db.insert(books).values(bookInsertValues(book)).run();
         added++;
       }
       return c.json({ success: true, added });
@@ -583,6 +647,45 @@ app.get("/api/books/search", (c) => {
     }));
 
   return c.json({ results });
+});
+
+// Site config (for the frontend to read feature flags from the API instead
+// of relying on build-time NEXT_PUBLIC_ vars).
+app.get("/api/config", (c) => {
+  return c.json({
+    siteName: config.siteName,
+    siteDescription: config.siteDescription,
+    features: config.features,
+  });
+});
+
+// Active lendings for a book (copies-mode only — returns [] when off).
+app.get("/api/books/:id/active-lendings", (c) => {
+  if (!isAuthed(c)) return c.json({ error: "Unauthorized" }, 401);
+  const id = parseInt(c.req.param("id"));
+  if (!Number.isFinite(id)) return c.json({ error: "Invalid id" }, 400);
+  const rows = db.select().from(activeLendings)
+    .where(eq(activeLendings.bookId, id))
+    .all();
+  return c.json({ lendings: rows });
+});
+
+// Borrower autocomplete — unique (name, contact) pairs seen in active lendings
+// first, then fall back to historical lending logs.
+app.get("/api/borrowers", (c) => {
+  if (!isAuthed(c)) return c.json({ error: "Unauthorized" }, 401);
+  const active = db.select().from(activeLendings).all();
+  const logs = db.select().from(lendingLogs).all();
+  const seen = new Map<string, { name: string; contact: string }>();
+  for (const a of active) {
+    const key = `${a.borrower}|${a.borrowerContact || ""}`;
+    if (!seen.has(key)) seen.set(key, { name: a.borrower, contact: a.borrowerContact || "" });
+  }
+  for (const l of logs) {
+    const key = `${l.borrower}|`;
+    if (!seen.has(key)) seen.set(key, { name: l.borrower, contact: "" });
+  }
+  return c.json({ borrowers: [...seen.values()] });
 });
 
 // Get lending history
