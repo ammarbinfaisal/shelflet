@@ -353,6 +353,86 @@ function FilterSection({
   );
 }
 
+// ── Stable Header Components ─────────────────────────
+// Defined at module scope so their component type is stable across BookList
+// re-renders. Otherwise the Popover inside ColumnFilter unmounts on every
+// render and the filter picker can never stay open.
+
+type FilterKey = keyof Pick<Filters, "categories" | "languages" | "authors">;
+
+function SortHeader({
+  field,
+  children,
+  sortField,
+  sortDir,
+  toggleSort,
+}: {
+  field: SortField;
+  children: React.ReactNode;
+  sortField: SortField;
+  sortDir: SortDir;
+  toggleSort: (f: SortField) => void;
+}) {
+  return (
+    <th className="px-4 py-3 font-medium">
+      <div className="flex items-center gap-1">
+        <button
+          className="cursor-pointer select-none hover:text-neutral-700 flex items-center"
+          onClick={() => toggleSort(field)}
+        >
+          {children}
+          <IconSort active={sortField === field} dir={sortField === field ? sortDir : "asc"} />
+        </button>
+      </div>
+    </th>
+  );
+}
+
+function FilterableHeader({
+  field,
+  children,
+  options,
+  selected,
+  filterKey,
+  sortField,
+  sortDir,
+  toggleSort,
+  toggleFilter,
+  clearFilter,
+}: {
+  field: SortField;
+  children: React.ReactNode;
+  options: string[];
+  selected: Set<string>;
+  filterKey: FilterKey;
+  sortField: SortField;
+  sortDir: SortDir;
+  toggleSort: (f: SortField) => void;
+  toggleFilter: (k: FilterKey, v: string) => void;
+  clearFilter: (k: FilterKey) => void;
+}) {
+  return (
+    <th className="px-4 py-3 font-medium">
+      <div className="flex items-center gap-1.5">
+        <button
+          className="cursor-pointer select-none hover:text-neutral-700 flex items-center"
+          onClick={() => toggleSort(field)}
+        >
+          {children}
+          <IconSort active={sortField === field} dir={sortField === field ? sortDir : "asc"} />
+        </button>
+        <ColumnFilter
+          label={field}
+          options={options}
+          selected={selected}
+          onToggle={(v) => toggleFilter(filterKey, v)}
+          onClear={() => clearFilter(filterKey)}
+        />
+      </div>
+    </th>
+  );
+}
+
 // ── Main Component ───────────────────────────────────
 
 export function BookList({ books }: { books: Book[] }) {
@@ -477,55 +557,6 @@ export function BookList({ books }: { books: Book[] }) {
 
   const available = filtered.filter(isAvailable);
   const lentOut = filtered.filter((b) => !isAvailable(b));
-
-  const SortHeader = ({ field, children, className }: { field: SortField; children: React.ReactNode; className?: string }) => (
-    <th className={`px-4 py-3 font-medium ${className || ""}`}>
-      <div className="flex items-center gap-1">
-        <button
-          className="cursor-pointer select-none hover:text-neutral-700 flex items-center"
-          onClick={() => toggleSort(field)}
-        >
-          {children}
-          <IconSort active={sortField === field} dir={sortField === field ? sortDir : "asc"} />
-        </button>
-      </div>
-    </th>
-  );
-
-  const FilterableHeader = ({
-    field,
-    children,
-    options,
-    selected,
-    filterKey,
-    className,
-  }: {
-    field: SortField;
-    children: React.ReactNode;
-    options: string[];
-    selected: Set<string>;
-    filterKey: keyof Pick<Filters, "categories" | "languages" | "authors">;
-    className?: string;
-  }) => (
-    <th className={`px-4 py-3 font-medium ${className || ""}`}>
-      <div className="flex items-center gap-1.5">
-        <button
-          className="cursor-pointer select-none hover:text-neutral-700 flex items-center"
-          onClick={() => toggleSort(field)}
-        >
-          {children}
-          <IconSort active={sortField === field} dir={sortField === field ? sortDir : "asc"} />
-        </button>
-        <ColumnFilter
-          label={field}
-          options={options}
-          selected={selected}
-          onToggle={(v) => toggleFilter(filterKey, v)}
-          onClear={() => clearFilter(filterKey)}
-        />
-      </div>
-    </th>
-  );
 
   // Active filter badges
   const activeBadges: { label: string; key: keyof Pick<Filters, "categories" | "languages" | "authors">; val: string }[] = [];
@@ -682,11 +713,41 @@ export function BookList({ books }: { books: Book[] }) {
           </colgroup>
           <thead>
             <tr className="bg-neutral-50 text-left text-neutral-500">
-              <SortHeader field="title">Title</SortHeader>
-              <FilterableHeader field="author" options={allAuthors} selected={filters.authors} filterKey="authors">Author</FilterableHeader>
+              <SortHeader field="title" sortField={sortField} sortDir={sortDir} toggleSort={toggleSort}>Title</SortHeader>
+              <FilterableHeader
+                field="author"
+                options={allAuthors}
+                selected={filters.authors}
+                filterKey="authors"
+                sortField={sortField}
+                sortDir={sortDir}
+                toggleSort={toggleSort}
+                toggleFilter={toggleFilter}
+                clearFilter={clearFilter}
+              >Author</FilterableHeader>
               {!HIDE_INFO && <th className="px-4 py-3 font-medium">Info</th>}
-              <FilterableHeader field="category" options={allCategories} selected={filters.categories} filterKey="categories">Category</FilterableHeader>
-              <FilterableHeader field="language" options={allLanguages} selected={filters.languages} filterKey="languages">Language</FilterableHeader>
+              <FilterableHeader
+                field="category"
+                options={allCategories}
+                selected={filters.categories}
+                filterKey="categories"
+                sortField={sortField}
+                sortDir={sortDir}
+                toggleSort={toggleSort}
+                toggleFilter={toggleFilter}
+                clearFilter={clearFilter}
+              >Category</FilterableHeader>
+              <FilterableHeader
+                field="language"
+                options={allLanguages}
+                selected={filters.languages}
+                filterKey="languages"
+                sortField={sortField}
+                sortDir={sortDir}
+                toggleSort={toggleSort}
+                toggleFilter={toggleFilter}
+                clearFilter={clearFilter}
+              >Language</FilterableHeader>
               <th className="px-4 py-3 font-medium">Status</th>
             </tr>
           </thead>
