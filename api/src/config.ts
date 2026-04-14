@@ -3,7 +3,13 @@
 
 function flag(name: string): boolean {
   const v = process.env[name];
-  return v === "true" || v === "1";
+  if (!v) return false;
+  const t = v.trim().toLowerCase();
+  return t === "true" || t === "1";
+}
+
+function str(name: string, fallback: string): string {
+  return (process.env[name]?.trim() || fallback);
 }
 
 export interface SiteFeatures {
@@ -19,8 +25,8 @@ export interface SiteConfig {
 }
 
 export const config: SiteConfig = {
-  siteName: process.env.SITE_NAME || "shelflet",
-  siteDescription: process.env.SITE_DESCRIPTION || "Ammar's book collection",
+  siteName: str("SITE_NAME", "shelflet"),
+  siteDescription: str("SITE_DESCRIPTION", "Ammar's book collection"),
   robotsDisallow: flag("ROBOTS_DISALLOW"),
   features: {
     translator: flag("FEATURE_TRANSLATOR"),

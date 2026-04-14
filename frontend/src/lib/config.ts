@@ -2,7 +2,13 @@
 // Next.js inlines NEXT_PUBLIC_* at build time; rebuild Vercel project to flip.
 
 function flag(v: string | undefined): boolean {
-  return v === "true" || v === "1";
+  if (!v) return false;
+  const t = v.trim().toLowerCase();
+  return t === "true" || t === "1";
+}
+
+function str(v: string | undefined, fallback: string): string {
+  return (v?.trim() || fallback);
 }
 
 export interface SiteFeatures {
@@ -18,9 +24,8 @@ export interface SiteConfig {
 }
 
 export const config: SiteConfig = {
-  siteName: process.env.NEXT_PUBLIC_SITE_NAME || "shelflet",
-  siteDescription:
-    process.env.NEXT_PUBLIC_SITE_DESCRIPTION || "Ammar's book collection",
+  siteName: str(process.env.NEXT_PUBLIC_SITE_NAME, "shelflet"),
+  siteDescription: str(process.env.NEXT_PUBLIC_SITE_DESCRIPTION, "Ammar's book collection"),
   robotsDisallow: flag(process.env.NEXT_PUBLIC_ROBOTS_DISALLOW),
   features: {
     translator: flag(process.env.NEXT_PUBLIC_FEATURE_TRANSLATOR),
