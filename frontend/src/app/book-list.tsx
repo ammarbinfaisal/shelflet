@@ -132,7 +132,11 @@ function BookCard({ book }: { book: Book }) {
         </div>
         {FEAT.copies ? (
           <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium ${isAvailable(book) ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
-            {book.availableCopies}/{book.totalCopies}
+            {book.totalCopies > 1
+              ? `${book.availableCopies}/${book.totalCopies}`
+              : isAvailable(book)
+              ? "In"
+              : "Out"}
           </span>
         ) : book.lentTo ? (
           <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700">
@@ -192,7 +196,11 @@ function BookTableRow({ book }: { book: Book }) {
       <td className="px-4 py-3">
         {FEAT.copies ? (
           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isAvailable(book) ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
-            {book.availableCopies}/{book.totalCopies} available
+            {book.totalCopies > 1
+              ? `${book.availableCopies}/${book.totalCopies} available`
+              : isAvailable(book)
+              ? "Available"
+              : "Unavailable"}
           </span>
         ) : book.lentTo ? (
           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700">

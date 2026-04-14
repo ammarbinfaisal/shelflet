@@ -34,8 +34,19 @@ function IconPlus({ className = "w-4 h-4" }: { className?: string }) {
 
 function IconRefresh({ className = "w-4 h-4" }: { className?: string }) {
   return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M5.5 15A7.5 7.5 0 0118.5 9M18.5 9L20 4M5.5 15L4 20" />
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 12a9 9 0 0 1 15.75-6" />
+      <path d="M21 3v6h-6" />
+      <path d="M21 12a9 9 0 0 1-15.75 6" />
+      <path d="M3 21v-6h6" />
     </svg>
   );
 }
@@ -384,7 +395,7 @@ function LendDialog({
         <h3 className="font-semibold mb-3 text-sm">
           Lend &ldquo;{book.title}&rdquo;
         </h3>
-        {FEAT.copies && (
+        {FEAT.copies && book.totalCopies > 1 && (
           <p className="text-xs text-muted-foreground mb-2">
             {book.availableCopies} of {book.totalCopies} available
           </p>
@@ -655,9 +666,15 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
                 <p className="text-xs text-neutral-400 mt-0.5 truncate">Sharh of {book.explanation}</p>
               )}
               {FEAT.copies ? (
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {book.availableCopies}/{book.totalCopies} available
-                </p>
+                book.totalCopies > 1 ? (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {book.availableCopies}/{book.totalCopies} available
+                  </p>
+                ) : (
+                  <p className={`text-xs mt-0.5 ${book.availableCopies > 0 ? "text-green-700" : "text-amber-700"}`}>
+                    {book.availableCopies > 0 ? "Available" : "Unavailable"}
+                  </p>
+                )
               ) : book.lentTo ? (
                 <p className="text-xs text-amber-700 mt-0.5">Lent to {book.lentTo}</p>
               ) : null}
@@ -743,7 +760,11 @@ export function AdminDashboard({ initialBooks }: { initialBooks: Book[] }) {
                     <span className="text-xs text-neutral-400">Hidden</span>
                   ) : FEAT.copies ? (
                     <span className={`text-xs ${book.availableCopies > 0 ? "text-green-700" : "text-amber-700"}`}>
-                      {book.availableCopies}/{book.totalCopies} available
+                      {book.totalCopies > 1
+                        ? `${book.availableCopies}/${book.totalCopies} available`
+                        : book.availableCopies > 0
+                        ? "Available"
+                        : "Unavailable"}
                     </span>
                   ) : book.lentTo ? (
                     <span className="text-xs text-amber-700">Lent to {book.lentTo}</span>
