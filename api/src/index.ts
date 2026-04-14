@@ -79,8 +79,13 @@ function bookSlug(b: { title: string; author: string; category: string | null; e
   return parts.join("--");
 }
 
+const allowedOrigins = (process.env.CORS_ORIGIN || "https://books.ammarfaisal.me")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 app.use("/*", cors({
-  origin: process.env.CORS_ORIGIN || "https://books.ammarfaisal.me",
+  origin: (origin) => (allowedOrigins.includes(origin) ? origin : null),
   credentials: true,
 }));
 
