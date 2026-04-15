@@ -739,6 +739,46 @@ app.post("/api/lending-logs/:id/note", async (c) => {
   return c.json({ success: true });
 });
 
+// Get borrower details - all lending history and current books
+app.get("/api/borrowers/:name", (c) => {
+  if (!isAuthed(c)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const name = decodeURIComponent(c.req.param("name"));
+
+  // Get all lending logs for this borrower
+  const logs = db.select().from(lendingLogs)
+    .where(eq(lendingLogs.borrower, name))
+    .orderBy(desc(lendingLogs.createdAt))
+    .all();
+
+  // Get currently borrowed books
+  const currentlyBorrowed = db.select().from(activeLendings)
+    .where(eq(activeLendings.borrower, name))
+    .all();
+
+  // Get book details for currently borrowed
+  const currentBooks = currentlyBorrowed.map((lending) => {
+    const book = db.select().from(books).where(eq(books.id, lending.bookId)).get();
+    return {
+      ...lending,
+      bookTitle: book?.title || "Unknown",
+      bookAuthor: book?.author || "",
+    };
+  });
+
+  return c.json({
+    borrower: name,
+    logs,
+    currentBooks,
+    stats: {
+      totalBorrowed: logs.filter(l => l.action === "lend").length,
+      totalReturned: logs.filter(l => l.action === "return").length,
+      currentlyHas: currentBooks.length,
+    }
+  });
+});
+
 const port = parseInt(process.env.PORT || "3001");
 console.log(`Shelflet API running on port ${port}`);
 serve({ fetch: app.fetch, port });

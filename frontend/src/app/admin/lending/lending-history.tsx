@@ -198,11 +198,23 @@ export function LendingHistory() {
                         <p className="text-xs text-neutral-500 mt-0.5">
                           {log.action === "lend" ? (
                             <>
-                              Lent to <span className="text-amber-700 font-medium">{log.borrower}</span>
+                              Lent to{" "}
+                              <Link
+                                href={`/admin/lending/${encodeURIComponent(log.borrower)}`}
+                                className="text-amber-700 font-medium hover:underline"
+                              >
+                                {log.borrower}
+                              </Link>
                             </>
                           ) : (
                             <>
-                              Returned from <span className="text-blue-700 font-medium">{log.borrower}</span>
+                              Returned from{" "}
+                              <Link
+                                href={`/admin/lending/${encodeURIComponent(log.borrower)}`}
+                                className="text-blue-700 font-medium hover:underline"
+                              >
+                                {log.borrower}
+                              </Link>
                             </>
                           )}
                         </p>
